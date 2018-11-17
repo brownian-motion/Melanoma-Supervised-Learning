@@ -34,23 +34,45 @@ class SoftmaxUnittest(unittest.TestCase):
                                    msg="Softmax value differs from expected at index %d" % i)
 
 
-class AbstractNonOverlapPoolingLayerTest(unittest.TestCase):
-    def test_max_of_nums(self):
+class AbstractPoolingLayerTest(unittest.TestCase):
+    def test_max_of_nums_no_overlap(self):
         inputs = numpy.array([[1, 2, 3, 4], [5, 6, 7, 8]])
-        maxpool_layer = AbstractNonOverlapPoolingLayer((2, 2), numpy.amax)
+        maxpool_layer = AbstractPoolingLayer((2, 2), func=numpy.amax, overlap_tiles=False)
         outputs = maxpool_layer.process(inputs)
         expected_outputs = numpy.array([[6, 8]])
 
         self.assertTrue(numpy.array_equal(expected_outputs, outputs),
-                        msg="Expected outputs and outputs from maxpool should match")
+                        msg="Expected outputs and outputs from maxpool should match (%s) vs (%s)" % (
+                        expected_outputs, outputs))
+
+    def test_max_of_nums_with_overlap(self):
+        inputs = numpy.array([[1, 2, 3, 4], [5, 6, 7, 8]])
+        maxpool_layer = AbstractPoolingLayer((2, 2), func=numpy.amax, overlap_tiles=True)
+        outputs = maxpool_layer.process(inputs)
+        expected_outputs = numpy.array([[6, 7, 8]])
+
+        self.assertTrue(numpy.array_equal(expected_outputs, outputs),
+                        msg="Expected outputs and outputs from maxpool should match (%s) vs (%s)" % (
+                        expected_outputs, outputs))
 
 
 class NonOverlapMaxpoolLayerTest(unittest.TestCase):
-    def test_2x2_tiles(self):
+    def test_2x2_tiles_no_overlap(self):
         inputs = numpy.array([[1, 2, 3, 4], [5, 6, 7, 8]])
-        maxpool_layer = NonOverlapMaxpoolLayer((2, 2))
+        maxpool_layer = MaxpoolLayer((2, 2), overlap_tiles=False)
         outputs = maxpool_layer.process(inputs)
         expected_outputs = numpy.array([[6, 8]])
 
         self.assertTrue(numpy.array_equal(expected_outputs, outputs),
-                        msg="Expected outputs and outputs from maxpool should match")
+                        msg="Expected outputs and outputs from maxpool should match (%s) vs (%s)" % (
+                        expected_outputs, outputs))
+
+    def test_2x2_tiles_with_overlap(self):
+        inputs = numpy.array([[1, 2, 3, 4], [5, 6, 7, 8]])
+        maxpool_layer = MaxpoolLayer((2, 2), overlap_tiles=True)
+        outputs = maxpool_layer.process(inputs)
+        expected_outputs = numpy.array([[6, 7, 8]])
+
+        self.assertTrue(numpy.array_equal(expected_outputs, outputs),
+                        msg="Expected outputs and outputs from maxpool should match (%s) vs (%s)" % (
+                        expected_outputs, outputs))

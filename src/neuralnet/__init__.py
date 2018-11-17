@@ -24,17 +24,25 @@ class SoftmaxLayer:
         return exps / sum(exps)
 
 
-class AbstractNonOverlapPoolingLayer:
-    def __init__(self, tile_shape, func=numpy.amax):
+class AbstractPoolingLayer:
+    def __init__(self, tile_shape, func=numpy.amax, overlap_tiles=False):
         if len(tile_shape) != 2:
             raise ValueError(
                 "This pooling layer implementation only knows how to handle 2-D tiles, inputs, and outputs")
         self.tile_shape = tile_shape
-        # calculate the number of non-overlapping tiles
         self.func = func
+        self._overlap_tiles = overlap_tiles
 
     def _compute_output_shape(self, input_shape, tile_shape):
+        if self._overlap_tiles:
+            return self._compute_output_shape_with_overlap(input_shape, tile_shape)
+        return self._compute_output_shape_non_overlap(input_shape, tile_shape)
+
+    def _compute_output_shape_non_overlap(self, input_shape, tile_shape):
         return tuple(math.ceil(input_shape[i] / tile_shape[i]) for i in range(len(tile_shape)))
+
+    def _compute_output_shape_with_overlap(self, input_shape, tile_shape):
+        return tuple(math.ceil(input_shape[i] - tile_shape[i] + 1) for i in range(len(tile_shape)))
 
     def process(self, input):
         output_shape = self._compute_output_shape(input.shape, self.tile_shape)
@@ -48,15 +56,26 @@ class AbstractNonOverlapPoolingLayer:
     def _get_tile(self, tile_coord, input, tile_shape):
         if len(tile_shape) != 2 or len(tile_coord) != 2:
             raise ValueError("Sorry, this convolutional layer only knows how to get 2-D tiles from input matrices")
-        left = tile_coord[0] * tile_shape[0]
+
+        if self._overlap_tiles:
+            left = tile_coord[0]
+        else:
+            left = tile_coord[0] * tile_shape[0]
+
         right = left + tile_shape[0]
-        top = tile_coord[1] * tile_shape[1]
+
+        if self._overlap_tiles:
+            top = tile_coord[1]
+        else:
+            top = tile_coord[1] * tile_shape[1]
+
         bottom = top + tile_shape[1]
-        output = input[left:right, top:bottom]
-        assert output.shape == tile_shape
-        return output
+
+        tile = input[left:right, top:bottom]
+        assert tile.shape == tile_shape
+        return tile
 
 
-class NonOverlapMaxpoolLayer(AbstractNonOverlapPoolingLayer):
-    def __init__(self, tile_shape):
-        AbstractNonOverlapPoolingLayer.__init__(self, tile_shape, func=numpy.amax)
+class MaxpoolLayer(AbstractPoolingLayer):
+    def __init__(self, tile_shape, overlap_tiles=False):
+        super().__init__(tile_shape, func=numpy.amax, overlap_tiles=overlap_tiles)
