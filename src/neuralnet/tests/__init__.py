@@ -79,19 +79,9 @@ class NonOverlapMaxpoolLayerTest(unittest.TestCase):
 
 
 class FullyConnectedLayerTest(unittest.TestCase):
-    def test_2x2_layer_with_initial_weights_gives_predicted_result(self):
-        layer = FullyConnectedLayer(0.01, 2, 2, 'relu')
-        result = layer.process([1, 2])
-        expected_result = [4 / 3, 4 / 3]
-        self.assertEqual(len(expected_result), len(result),
-                         msg="Expected result and actual result should be the same length")
-        for i in range(len(expected_result)):
-            self.assertEqual(expected_result[i], result[i],
-                             msg="Expected result %.2f differed from actual result %.2f at index %d" % (
-                                 expected_result[i], result[i], i))
-
     def test_3x1_layer_with_initial_weights_gives_predicted_result(self):
         layer = FullyConnectedLayer(0.01, 3, 1, 'relu')
+        layer.weights = numpy.array([[.6], [.7], [.8]])
         result = layer.process([4, 5, 6])
         expected_result = [4]
         self.assertEqual(len(expected_result), len(result),
@@ -103,7 +93,8 @@ class FullyConnectedLayerTest(unittest.TestCase):
 
     def test_2x2_layer_with_handset_weights_gives_predicted_result(self):
         layer = FullyConnectedLayer(0.01, 2, 2, 'relu')
-        layer.weights = numpy.array([[1, 2, 3], [4, 5, 6]])  # field is impl-specific
+        layer.weights = numpy.array([[1, 2], [4, 5]])  # field is impl-specific
+        layer.bias = to_column_vector([3, 6])
         result = layer.process([10, 11])
         expected_result = [10 + 22 + 3, 40 + 55 + 6]
         self.assertEqual(len(expected_result), len(result),

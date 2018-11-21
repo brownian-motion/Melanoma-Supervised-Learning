@@ -1,6 +1,5 @@
-import math
-
-import numpy
+from neuralnet.activation import *
+from neuralnet.vector_utils import *
 
 
 class SoftmaxLayer:
@@ -20,8 +19,23 @@ class SoftmaxLayer:
         :param inputs: an array (or iterable) of size N
         :return: the N inputs, normalized using softmax
         '''
-        exps = numpy.array([math.exp(inp) for inp in inputs])
-        return exps / sum(exps)
+        if not is_column_vector(inputs):
+            inputs = to_column_vector(inputs)
+        assert is_column_vector(inputs)
+        self._last_inputs = inputs
+        self._last_outputs = to_column_vector(vec_softmax(inputs))
+        assert is_column_vector(self._last_outputs)
+        assert self._last_outputs.size == inputs.size
+        return self._last_outputs
+
+    def backpropagate(self, true_ys):
+        '''
+        Updates any relevant weights (none, for this simple activation layer)
+        and then returns the error for the previous layer.
+        :param true_ys: the error in what this layer output
+        :return: the error for the previous layer
+        '''
+        return true_ys - self._last_outputs
 
 
 class AbstractConvolutionalLayer:
@@ -96,63 +110,69 @@ class AbstractPoolingLayer(AbstractConvolutionalLayer):
         return output
 
 
-def relu(x):
-    return max(0, x)
-
-
-def relu_deriv(x):
-    return 1 if x > 0 else 0
-
-
 class FullyConnectedLayer:
-    def __init__(self, training_rate, num_ins, num_outs, activation_function_name='relu',
-                 initial_weight=None):
+    def __init__(self, training_rate, num_ins, num_outs, activation_function_name='relu'):
         self.training_rate = training_rate
         self.num_ins = num_ins
         self.num_outs = num_outs
         self.activation_function, self.activation_function_deriv = self._get_activation_function(
             activation_function_name)
-        self.weights = self._make_weights(num_ins, num_outs, initial_weight)
+        self.weights = self._make_random_weights(num_ins, num_outs)
+        self.bias = self._make_bias(num_outs)
+        assert is_column_vector(self.bias)
 
     @staticmethod
-    def _make_weights(num_ins, num_outs, initial_weight=None):
-        if initial_weight is None:
-            initial_weight = 1 / (num_ins + 1)
-        return numpy.full((num_outs, 1 + num_ins), initial_weight)
+    def _make_random_weights(num_ins, num_outs):
+        return numpy.random.rand(num_outs, num_ins)
 
     @staticmethod
-    def _append_bias_to_inputs(input_vec):
-        return numpy.append(input_vec, 1)
+    def _make_bias(num_outs):
+        return numpy.random.rand(num_outs, 1)  # second dimension says num_cols = 1, so a col vector
 
     def process(self, inputs):
-        raw_output_vec = self._compute_neural_output(inputs)
-        return map_function_numpy(self.activation_function, raw_output_vec)
+        self._last_ins = inputs
+        self._last_intermediate = self._compute_neural_output(inputs)
+        self._last_outputs = self.activation_function(self._last_intermediate)
+        return self._last_outputs
 
     def _compute_neural_output(self, raw_inputs):
-        raw_inputs = numpy.array(raw_inputs).flatten()
-        if len(raw_inputs) != self.num_ins:
+        inputs = to_column_vector(raw_inputs)
+        if inputs.size != self.num_ins:
             raise ValueError(
                 "Fully connected layer expected %d inputs (excluding bias), found %d" % (self.num_ins, len(raw_inputs)))
-        raw_inputs = self._append_bias_to_inputs(raw_inputs)
-        raw_output_vec = numpy.matmul(self.weights, numpy.transpose(raw_inputs))
+        raw_output_vec = numpy.matmul(self.weights, inputs) + self.bias
         assert len(raw_output_vec) == self.num_outs
         return raw_output_vec
 
-    def back_propagate(self, inputs, outputs, correct_outputs):
-        neural_intermediate = self._compute_neural_output(inputs)
-        sigma = (outputs * numpy.transpose(self.weights)).multiply(self.activation_function_deriv(neural_intermediate))
-        gradient = numpy.transpose(inputs) * sigma
-        raise NotImplementedError("Haven't implemented back-propagation yet")
+    def backpropagate(self, error):
+        '''
+        Updates any relevant weights
+        and then returns the error for the previous layer.
+        :param error: the error in what this layer output
+        :return: the error for the previous layer
+        '''
+        # should be a column:
+        if not is_column_vector(error):
+            error = to_column_vector(error)
+        assert is_column_vector(error)
+
+        last_layers_error = numpy.multiply(numpy.matmul(numpy.transpose(self.weights), error),
+                                           self.activation_function_deriv(self._last_intermediate))
+        assert is_column_vector(last_layers_error)
+
+        gradient = numpy.matmul(error, to_row_vector(self._last_outputs))
+        assert gradient.shape == self.weights.shape
+        self.weights -= self.training_rate * gradient
+        assert error.shape == self.bias.shape
+        self.bias -= self.training_rate * error
+
+        return last_layers_error
 
     @staticmethod
     def _get_activation_function(activation_function_name):
         if activation_function_name == "relu":
-            return relu, relu_deriv
+            return vec_relu, vec_relu_deriv
         raise ValueError("Unrecognized activation function \"%s\"" % activation_function_name)
-
-
-def map_function_numpy(func, vec):
-    return numpy.fromiter((func(out) for out in vec), vec.dtype, len(vec))
 
 
 class MaxpoolLayer(AbstractPoolingLayer):
