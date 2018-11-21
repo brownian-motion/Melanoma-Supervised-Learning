@@ -81,9 +81,10 @@ class NonOverlapMaxpoolLayerTest(unittest.TestCase):
 class FullyConnectedLayerTest(unittest.TestCase):
     def test_3x1_layer_with_initial_weights_gives_predicted_result(self):
         layer = FullyConnectedLayer(0.01, 3, 1, 'relu')
-        layer.weights = numpy.array([[.6], [.7], [.8]])
+        layer.weights = to_row_vector([0.6, 0.7, 0.8])
+        layer.bias = to_column_vector([0.9])
         result = layer.process([4, 5, 6])
-        expected_result = [4]
+        expected_result = [.6 * 4 + .7 * 5 + .8 * 6 + 0.9]
         self.assertEqual(len(expected_result), len(result),
                          msg="Expected result and actual result should be the same length")
         for i in range(len(expected_result)):
