@@ -104,3 +104,16 @@ class FullyConnectedLayerTest(unittest.TestCase):
             self.assertEqual(expected_result[i], result[i],
                              msg="Expected result %.2f differed from actual result %.2f at index %d" % (
                                  expected_result[i], result[i], i))
+
+    def test_learns_from_backpropagation(self):
+        layer = FullyConnectedLayer(0.001, 2, 2, 'relu')
+        layer.weights = numpy.array([[1.0, 2], [4, 5]])  # field is impl-specific
+        layer.bias = to_column_vector([3.0, 6])
+        sample_input = [10, 11]
+        result = layer.process(sample_input)
+        layer.backpropagate(to_column_vector([1, -1]))
+        result2 = layer.process(sample_input)
+        self.assertLess(result2[0, 0], result[0, 0],
+                        msg="Prediction for top of column should have grown smaller, because error indicated it was too large (1 more than true)")
+        self.assertGreater(result2[1, 0], result[1, 0],
+                           msg="Prediction for bottom of column should have grown smaller, because error indicated it was too small (1 less than true_")
