@@ -30,7 +30,7 @@ class Sample:
         return [f for f in listdir(dirname) if isfile(join(dirname, f)) and f.endswith("json")]
 
     @staticmethod
-    def get_samples(dirname="ISIC-imagse/UDA-1"):
+    def get_samples(dirname="ISIC-images/UDA-1"):
         return [Sample.load_sample(open(filename)) for filename in Sample._get_metadata_file_names(dirname)]
 
     @staticmethod
