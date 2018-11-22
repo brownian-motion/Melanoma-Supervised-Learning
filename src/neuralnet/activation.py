@@ -28,6 +28,27 @@ def vec_softmax_deriv(xs):
     raise NotImplementedError("d softmax / d x is not implemented")
 
 
+def scalar_sigmoid(x):
+    if x > 0:
+        return 1 / (1 + math.exp(-x))
+    else:
+        exp = math.exp(x)
+        return exp / (exp + 1)
+
+
+def vec_sigmoid(xs):
+    return map_function_numpy(scalar_sigmoid, xs)
+
+
+def scalar_sigmoid_deriv(x):
+    sigmoid = scalar_sigmoid(x)
+    return (sigmoid - 1) * sigmoid
+
+
+def vec_sigmoid_deriv(xs):
+    return map_function_numpy(scalar_sigmoid_deriv, xs)
+
+
 def map_function_numpy(func, vec):
     if type(vec) is not numpy.ndarray:
         vec = numpy.array(vec)

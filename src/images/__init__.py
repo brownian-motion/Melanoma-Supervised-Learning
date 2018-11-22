@@ -1,4 +1,5 @@
 import json
+import os
 from os import listdir
 from os.path import isfile, join
 
@@ -6,7 +7,8 @@ import cv2
 
 
 class Sample:
-    def __init__(self, name, diagnosis, image_dim):
+    def __init__(self, name, diagnosis, image_dim, filename):
+        self.filename = filename
         self.image_dim = image_dim
         self.name = name
         self.diagnosis = diagnosis
@@ -16,7 +18,7 @@ class Sample:
         Returns a NumPy matrix of RGB triplets.
         :return:
         '''
-        return cv2.imread(self.name + ".jpg")
+        return cv2.imread(self.filename)
 
     def get_grayscale_image(self):
         '''
@@ -26,11 +28,11 @@ class Sample:
         return cv2.cvtColor(self.get_image(), cv2.COLOR_BGR2GRAY)
 
     @staticmethod
-    def _get_metadata_file_names(dirname="ISIC-images/UDA-1"):
-        return [f for f in listdir(dirname) if isfile(join(dirname, f)) and f.endswith("json")]
+    def _get_metadata_file_names(dirname):
+        return [join(dirname, f) for f in listdir(dirname) if isfile(join(dirname, f)) and f.endswith("json")]
 
     @staticmethod
-    def get_samples(dirname="ISIC-images/UDA-1"):
+    def get_samples(dirname):
         return [Sample.load_sample(open(filename)) for filename in Sample._get_metadata_file_names(dirname)]
 
     @staticmethod
@@ -40,5 +42,6 @@ class Sample:
         return Sample(
             sample_json[u'name'],
             sample_json[u'meta'][u'clinical'][u'diagnosis'],
-            (acquisition_data[u'pixelsX'], acquisition_data[u'pixelsY'])
+            (acquisition_data[u'pixelsX'], acquisition_data[u'pixelsY']),
+            os.path.dirname(file.name) + "/" + sample_json[u'name'] + ".jpg"
         )

@@ -196,6 +196,8 @@ class FullyConnectedLayer:
     def _get_activation_function(activation_function_name):
         if activation_function_name == "relu":
             return vec_relu, vec_relu_deriv
+        if activation_function_name == 'sigmoid':
+            return vec_sigmoid, vec_sigmoid_deriv
         raise ValueError("Unrecognized activation function \"%s\"" % activation_function_name)
 
 
@@ -209,6 +211,30 @@ class MaxpoolLayer(AbstractPoolingLayer):
 
     def __init__(self, tile_shape, overlap_tiles=False):
         super().__init__(tile_shape, func=numpy.amax, overlap_tiles=overlap_tiles)
+
+
+class MinpoolLayer(AbstractPoolingLayer):
+    '''
+    Performs max pooling on a matrix of input values
+    as a layer in a neural net.
+    Max pooling divides up the input matrix into 'tiles' or 'pools'
+    and returns the maximum value for each pool as its output.
+    '''
+
+    def __init__(self, tile_shape, overlap_tiles=False):
+        super().__init__(tile_shape, func=numpy.amin, overlap_tiles=overlap_tiles)
+
+
+class MeanpoolLayer(AbstractPoolingLayer):
+    '''
+    Performs max pooling on a matrix of input values
+    as a layer in a neural net.
+    Max pooling divides up the input matrix into 'tiles' or 'pools'
+    and returns the maximum value for each pool as its output.
+    '''
+
+    def __init__(self, tile_shape, overlap_tiles=False):
+        super().__init__(tile_shape, func=numpy.mean, overlap_tiles=overlap_tiles)
 
 
 class ConvolutionalLayer(AbstractPoolingLayer):
