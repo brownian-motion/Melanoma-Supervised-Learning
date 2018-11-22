@@ -117,3 +117,29 @@ class FullyConnectedLayerTest(unittest.TestCase):
                         msg="Prediction for top of column should have grown smaller, because error indicated it was too large (1 more than true)")
         self.assertGreater(result2[1, 0], result[1, 0],
                            msg="Prediction for bottom of column should have grown smaller, because error indicated it was too small (1 less than true_")
+
+
+class ConvolutionalLayerTest(unittest.TestCase):
+    def test_convolutional_layer_with_known_weight_gives_predicted_results(self):
+        layer = ConvolutionalLayer((2, 2))
+        layer.filter_weights = numpy.array([[1, 2], [3, 4]])  # implementation-dependent
+        results = layer.process(numpy.array([[1, 1, 5], [2, 2, 2], [1, 1, 1]]))
+        expected_results = numpy.array([[1 * 1 + 1 * 2 + 2 * 3 + 2 * 4, 1 * 1 + 5 * 2 + 2 * 3 + 2 * 4],
+                                        [2 * 1 + 2 * 2 + 1 * 3 + 1 * 4, 2 * 1 + 2 * 2 + 1 * 3 + 1 * 4]])
+        self.assertEqual(results.shape, expected_results.shape, "Results and expected results should be the same shape")
+        for i in range(results.shape[0]):
+            for j in range(results.shape[1]):
+                self.assertEqual(results[i, j], expected_results[i, j],
+                                 "Results and expected results differ at spot (%d, %d)" % (i, j))
+
+    def test_convolutional_layer_learns(self):
+        layer = ConvolutionalLayer((2, 2))
+        layer.filter_weights = numpy.array([[1.0, 2], [3, 4]])  # implementation-dependent
+        sample_input = numpy.array([[1.0, 1, 5], [2, 2, 2], [1, 1, 1]])
+        results = layer.process(sample_input)
+        layer.backpropagate(numpy.array([[1.0, 0], [0, -1]]))
+        results2 = layer.process(sample_input)
+        self.assertLess(results2[0, 0], results[0, 0],
+                        msg="Prediction for top left should have grown smaller, because error indicated it was too large (1 more than true value)")
+        self.assertGreater(results2[1, 1], results[1, 1],
+                           msg="Prediction for bottom right should ave grown greater, because error indicated it was too small (1 less than true value)")
