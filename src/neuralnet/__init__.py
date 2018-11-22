@@ -131,7 +131,7 @@ class AbstractPoolingLayer(AbstractConvolutionalLayer):
 
 
 class FullyConnectedLayer:
-    def __init__(self, training_rate, num_ins, num_outs, activation_function_name='relu'):
+    def __init__(self, num_ins, num_outs, training_rate=0.01, activation_function_name='relu'):
         self.training_rate = training_rate
         self.num_ins = num_ins
         self.num_outs = num_outs
@@ -176,17 +176,21 @@ class FullyConnectedLayer:
             error = to_column_vector(error)
         assert is_column_vector(error)
 
-        last_layers_error = numpy.multiply(numpy.matmul(numpy.transpose(self.weights), error),
-                                           self.activation_function_deriv(self._last_intermediate))
+        # assert intermediate_delta.shape == self._last_intermediate.shape
+        assert is_column_vector(self._last_intermediate)
+        assert self._last_intermediate.size == self.num_outs
+        deriv = self.activation_function_deriv(self._last_intermediate)
+        last_layers_error = numpy.multiply(error, deriv)
         assert is_column_vector(last_layers_error)
+        assert last_layers_error.size == self.num_outs
 
-        gradient = numpy.matmul(error, to_row_vector(self._last_outputs))
+        gradient = numpy.matmul(error, to_row_vector(self._last_ins))
         assert gradient.shape == self.weights.shape
         self.weights -= self.training_rate * gradient
         assert error.shape == self.bias.shape
         self.bias -= self.training_rate * error
 
-        return last_layers_error
+        return numpy.matmul(numpy.transpose(self.weights), last_layers_error)
 
     @staticmethod
     def _get_activation_function(activation_function_name):
@@ -218,6 +222,7 @@ class ConvolutionalLayer(AbstractPoolingLayer):
         return numpy.sum(input_tile * self.filter_weights)
 
     def backpropagate(self, error):
+        error = error.reshape(self._last_output.shape)  # returns a new view, not the underlying object
         last_error = numpy.zeros(self._compute_input_shape(error.shape, self.tile_shape))
         weight_gradient = numpy.zeros(self.tile_shape)
         (tile_height, tile_width) = self.tile_shape
@@ -231,3 +236,20 @@ class ConvolutionalLayer(AbstractPoolingLayer):
         self.filter_weights -= self.training_rate * weight_gradient
 
         return last_error
+
+
+class LinearNeuralNetwork:
+    def __init__(self):
+        self.layers = []
+
+    def process(self, inputs):
+        for layer in self.layers:
+            inputs = layer.process(inputs)
+        return inputs
+
+    def backpropagate(self, true_outputs):
+        for layer in reversed(self.layers):
+            true_outputs = layer.backpropagate(true_outputs)
+
+    def add_layer(self, layer):
+        self.layers.append(layer)
