@@ -137,8 +137,8 @@ class ConvolutionalLayerTest(unittest.TestCase):
         layer = ConvolutionalLayer((2, 2))
         layer.filter_weights = numpy.array([[1, 2], [3, 4]])  # implementation-dependent
         results = layer.process(numpy.array([[1, 1, 5], [2, 2, 2], [1, 1, 1]]))
-        expected_results = numpy.array([[1 * 1 + 1 * 2 + 2 * 3 + 2 * 4, 1 * 1 + 5 * 2 + 2 * 3 + 2 * 4],
-                                        [2 * 1 + 2 * 2 + 1 * 3 + 1 * 4, 2 * 1 + 2 * 2 + 1 * 3 + 1 * 4]])
+        expected_results = numpy.array([[1 * 4 + 1 * 3 + 2 * 2 + 2 * 1, 1 * 4 + 5 * 3 + 2 * 2 + 2 * 1],
+                                        [2 * 4 + 2 * 3 + 1 * 2 + 1 * 1, 2 * 4 + 2 * 3 + 1 * 2 + 1 * 1]])
         self.assertEqual(results.shape, expected_results.shape, "Results and expected results should be the same shape")
         for i in range(results.shape[0]):
             for j in range(results.shape[1]):
@@ -147,8 +147,7 @@ class ConvolutionalLayerTest(unittest.TestCase):
 
     def test_convolutional_layer_learns(self):
         layer = ConvolutionalLayer((2, 2))
-        layer.filter_weights = numpy.array([[1.0, 2], [3, 4]])  # implementation-dependent
-        sample_input = numpy.array([[1.0, 1, 5], [2, 2, 2], [1, 1, 1]])
+        sample_input = numpy.array([[1.0, 1, 5], [2, 0, 2], [1, 1, 1]])
         results = layer.process(sample_input)
         layer.backpropagate(numpy.array([[1.0, 0], [0, -1]]))
         results2 = layer.process(sample_input)
@@ -167,7 +166,7 @@ class LinearNeuralNetworkTest(unittest.TestCase):
 
         # ignore the results, just run the process to see what comes out
         results = net.process(numpy.array([[1.0, 1, 5], [2, 2, 2], [1, 1, 1]]))
-        self.assertEquals(2, results.size, msg="Number of outputs doesn't match what's expected")
+        self.assertEqual(2, results.size, msg="Number of outputs doesn't match what's expected")
         self.assertTrue(is_column_vector(results))
 
     def test_linear_neural_net_learns(self):
@@ -179,7 +178,7 @@ class LinearNeuralNetworkTest(unittest.TestCase):
         # ignore the results, just run the process to see what comes out
         sample_inputs = numpy.array([[1.0, 1, 5], [2, 2, 2], [1, 1, 1]])
         results = net.process(sample_inputs)
-        self.assertEquals(2, results.size, msg="Number of outputs doesn't match what's expected")
+        self.assertEqual(2, results.size, msg="Number of outputs doesn't match what's expected")
         self.assertTrue(is_column_vector(results))
         net.backpropagate(numpy.add(to_column_vector([-1, 1]), results))
         results2 = net.process(sample_inputs)

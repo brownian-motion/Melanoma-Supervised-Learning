@@ -1,3 +1,5 @@
+from scipy.signal import convolve
+
 from neuralnet.activation import *
 from neuralnet.vector_utils import *
 
@@ -159,7 +161,7 @@ class FullyConnectedLayer:
         inputs = to_column_vector(raw_inputs)
         if inputs.size != self.num_ins:
             raise ValueError(
-                "Fully connected layer expected %d inputs (excluding bias), found %d" % (self.num_ins, len(raw_inputs)))
+                "Fully connected layer expected %d inputs (excluding bias), found %d" % (self.num_ins, inputs.size))
         raw_output_vec = numpy.matmul(self.weights, inputs) + self.bias
         assert len(raw_output_vec) == self.num_outs
         return raw_output_vec
@@ -237,9 +239,9 @@ class MeanpoolLayer(AbstractPoolingLayer):
         super().__init__(tile_shape, func=numpy.mean, overlap_tiles=overlap_tiles)
 
 
-class ConvolutionalLayer(AbstractPoolingLayer):
+# TODO: use scipy.signal.convolve
+class ConvolutionalLayer:
     def __init__(self, filter_shape, training_rate=0.01):
-        super().__init__(filter_shape, func=lambda tile: self.calculate_pixel_output(tile), overlap_tiles=True)
         self.training_rate = training_rate
         self.filter_weights = numpy.random.rand(*filter_shape)
 
@@ -248,20 +250,35 @@ class ConvolutionalLayer(AbstractPoolingLayer):
         return numpy.sum(input_tile * self.filter_weights)
 
     def backpropagate(self, error):
+        '''
+        Thanks to https://www.jefkine.com/general/2016/09/05/backpropagation-in-convolutional-neural-networks/
+        :param error:
+        :return:
+        '''
         error = error.reshape(self._last_output.shape)  # returns a new view, not the underlying object
-        last_error = numpy.zeros(self._compute_input_shape(error.shape, self.tile_shape))
-        weight_gradient = numpy.zeros(self.tile_shape)
-        (tile_height, tile_width) = self.tile_shape
+        last_error = numpy.zeros(self._last_input.shape)
+        # weight_gradient = numpy.zeros(self.filter_weights.shape)
+        (tile_height, tile_width) = self.filter_weights.shape
 
         # can't really use the convolve function here because it moves too many tiles at once, and updates local vars
         for h in range(error.shape[0]):
             for w in range(error.shape[1]):
                 last_error[h:h + tile_width, w: w + tile_width] += self.filter_weights * error[h, w]
-                weight_gradient += self._last_input[h:h + tile_height, w:w + tile_width] * error[h, w]
+                # weight_gradient += self._last_input[h:h + tile_height, w:w + tile_width] * error[h, w]
 
-        self.filter_weights -= self.training_rate * weight_gradient
+        # I don't know what's wrong and this is ba  d. It should be subtracting.
+        # I think it's producing backpropagation incorrectly,
+        # this should be made from convolution w/ the transpose of weights against something
+        # self.filter_weights -= self.training_rate * numpy.transpose(weight_gradient)
+        weight_gradient = convolve(self._last_input, numpy.transpose(error), mode='valid', method='direct')
+        self.filter_weights -= self.training_rate * numpy.transpose(weight_gradient)
 
         return last_error
+
+    def process(self, inputs):
+        self._last_input = inputs
+        self._last_output = convolve(inputs, self.filter_weights, mode='valid', method='direct')
+        return self._last_output
 
 
 class LinearNeuralNetwork:

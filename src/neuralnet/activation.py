@@ -16,7 +16,7 @@ def scalar_relu(x):
 
 
 def vec_relu(xs):
-    return map_function_numpy(scalar_relu, xs)
+    return numpy.maximum(0, xs)
 
 
 def vec_softmax(xs):
