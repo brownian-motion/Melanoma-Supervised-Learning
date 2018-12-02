@@ -39,3 +39,15 @@ class MatrixShapeTest(unittest.TestCase):
     def test_can_make_row_from_column(self):
         row = to_row_vector(get_sample_column())
         self.assertTrue(is_row_vector(row), msg="Did not make row vector from column correctly: %s" % row)
+
+    def test_2d_coerces_to_3d(self):
+        inp = numpy.array([[1, 2], [3, 4]])
+        out = coerce_to_3d(inp)
+        self.assertSequenceEqual((1, 2, 2), out.shape)
+        self.assertTrue(numpy.array_equal([[[1, 2], [3, 4]]], out))
+
+    def test_3d_coerces_to_3d(self):
+        inp = numpy.array([[[1, 2], [3, 4]]])
+        out = coerce_to_3d(inp)
+        self.assertSequenceEqual((1, 2, 2), out.shape)
+        self.assertTrue(numpy.array_equal(inp, out))

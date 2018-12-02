@@ -81,7 +81,8 @@ class AbstractConvolutionalLayer:
         assert tile.shape == tile_shape
         return tile
 
-    def convolve(self, input_mat, convolution_func):
+    def convolve2d(self, input_mat, convolution_func):
+        assert len(input_mat.shape) == 2
         output_shape = self._compute_output_shape(input_mat.shape, self.tile_shape)
         output = numpy.zeros(output_shape)
         for i in range(output_shape[0]):
@@ -129,10 +130,17 @@ class AbstractPoolingLayer(AbstractConvolutionalLayer):
         super().__init__(tile_shape, overlap_tiles)
         self.func = func
 
-    def process(self, input, remember_inputs=False):
-        self._last_input = input
-        self._last_output = self.convolve(input, self.func)
-        return self._last_output
+    def process(self, inputs, remember_inputs=False):
+        inputs = coerce_to_3d(inputs)
+        result = []
+        for layer in inputs:
+            result.append(self.convolve2d(layer, self.func))
+        result = numpy.array(result)
+        assert len(result.shape) == 3
+        if remember_inputs:
+            self._last_input = inputs
+            self._last_output = result
+        return result
 
     # TODO: implement backpropagation by remembering which cell was used for output and backpropagating to there
 
@@ -261,18 +269,15 @@ class MeanpoolLayer(AbstractPoolingLayer):
         return last_error / numpy.prod(self.tile_shape)
 
 
-
-# TODO: use scipy.signal.convolve
 class ConvolutionalLayer:
-    def __init__(self, filter_shape, training_rate=0.01):
+    def __init__(self, filter_shape, num_filters=1, training_rate=0.01):
         self.training_rate = training_rate
-        self.filter_weights = numpy.random.rand(*filter_shape)
+        self.filters = [numpy.random.rand(*filter_shape) for _ in range(num_filters)]
+        if len(filter_shape) is not 2:
+            raise ValueError("Filters must be 2-dimensional")
+        self.filter_shape = filter_shape
         self._last_inputs = []
         self._last_outputs = []
-
-    def calculate_pixel_output(self, input_tile):
-        assert input_tile.shape == self.filter_weights.shape
-        return numpy.sum(input_tile * self.filter_weights)
 
     def backpropagate(self, error):
         '''
@@ -283,27 +288,53 @@ class ConvolutionalLayer:
         last_output = self._last_outputs.pop()
         last_input = self._last_inputs.pop()
         error = error.reshape(last_output.shape)  # returns a new view, not the underlying object
-        last_error = numpy.zeros(last_input.shape)
+        last_error = numpy.zeros(last_input.shape)  # will always be 3-D
         # weight_gradient = numpy.zeros(self.filter_weights.shape)
-        (tile_height, tile_width) = self.filter_weights.shape
+        (tile_height, tile_width) = self.filter_shape  # should always be 2-D
+        num_input_layers = error.shape[0] // len(self.filters)
+        assert num_input_layers * len(self.filters) == error.shape[0]
 
-        # can't really use the convolve function here because it moves too many tiles at once, and updates local vars
-        for h in range(error.shape[0]):
-            for w in range(error.shape[1]):
-                last_error[h:h + tile_width, w: w + tile_width] += self.filter_weights * error[h, w]
-                # weight_gradient += self._last_input[h:h + tile_height, w:w + tile_width] * error[h, w]
+        # look at each output layer as a convolution of one filter and one input layer,
+        # and find the total gradient for that filter for each layer
+        for filter_num in range(len(self.filters)):
+            weight_gradient = numpy.zeros_like(self.filters[filter_num])
+            # total up the gradient for this filter for each input layer
+            for input_layer_num in range(num_input_layers):  # for loops should match the relative order in process()
+                for h in range(error.shape[0]):
+                    for w in range(error.shape[1]):
+                        last_error[input_layer_num, h:h + tile_width, w:w + tile_width] += \
+                            self.filters[filter_num] * error[filter_num * num_input_layers + input_layer_num, h, w]
 
-        # I don't know what's wrong and this is ba  d. It should be subtracting.
-        # I think it's producing backpropagation incorrectly,
-        # this should be made from convolution w/ the transpose of weights against something
-        # self.filter_weights -= self.training_rate * numpy.transpose(weight_gradient)
-        weight_gradient = convolve(last_input, numpy.flip(error), mode='valid', method='direct')
-        self.filter_weights -= self.training_rate * numpy.flip(weight_gradient)
+                # I don't know what's wrong and this is bad.
+                # I think it's producing backpropagation incorrectly
+                weight_gradient += convolve(last_input[input_layer_num], numpy.flip(error[filter_num]),
+                                            mode='valid', method='direct')
+                # we don't update the filter until we've totaled for each layer, or else the changes would affect each gradient
+            self.filters[filter_num] -= self.training_rate * numpy.flip(weight_gradient)
 
         return last_error
 
     def process(self, inputs, remember_inputs=False):
-        results = convolve(inputs, self.filter_weights, mode='valid', method='direct')
+        '''
+        This only accepts 3-D input, convolves using a 2-D filter, and always gives 3-D output.
+
+        For example, a 3x10x10 matrix convolved with 4 2x2 filters will yield a 12x9x9 output.
+
+        2-D input is coerced to a 3-D matrix such that a 7x7 input becomes a 1x7x7 input.
+
+        :param inputs: a 3-D matrix of (depth)x(width)x(height) or a 2-D matrix of (width)x(height) (assumed to be of depth 1)
+        :param remember_inputs: true if this input should be remembered for future learning
+        :return: a 3-D matrix of (depth)x(width)x(height)
+        '''
+        # coerce the inputs to the right dimensionality, so it can accept an NxM array as a 1xNxM array.
+        inputs = coerce_to_3d(inputs)
+        assert len(inputs.shape) == 3
+        results = []
+        for filter2d in self.filters:
+            for layer2d in inputs:
+                result2d = convolve(layer2d, filter2d, mode='valid', method='direct')
+                results.append(result2d)
+        results = numpy.array(results)
         if remember_inputs:
             self._last_inputs.append(inputs)
             self._last_outputs.append(results)

@@ -41,7 +41,7 @@ class AbstractPoolingLayerTest(unittest.TestCase):
         inputs = numpy.array([[1, 2, 3, 4], [5, 6, 7, 8]])
         maxpool_layer = AbstractPoolingLayer((2, 2), func=numpy.amax, overlap_tiles=False)
         outputs = maxpool_layer.process(inputs)
-        expected_outputs = numpy.array([[6, 8]])
+        expected_outputs = numpy.array([[[6, 8]]])
 
         self.assertTrue(numpy.array_equal(expected_outputs, outputs),
                         msg="Expected outputs and outputs from maxpool should match (%s) vs (%s)" % (
@@ -51,7 +51,7 @@ class AbstractPoolingLayerTest(unittest.TestCase):
         inputs = numpy.array([[1, 2, 3, 4], [5, 6, 7, 8]])
         maxpool_layer = AbstractPoolingLayer((2, 2), func=numpy.amax, overlap_tiles=True)
         outputs = maxpool_layer.process(inputs)
-        expected_outputs = numpy.array([[6, 7, 8]])
+        expected_outputs = numpy.array([[[6, 7, 8]]])
 
         self.assertTrue(numpy.array_equal(expected_outputs, outputs),
                         msg="Expected outputs and outputs from maxpool should match (%s) vs (%s)" % (
@@ -63,7 +63,7 @@ class NonOverlapMaxpoolLayerTest(unittest.TestCase):
         inputs = numpy.array([[1, 2, 3, 4], [5, 6, 7, 8]])
         maxpool_layer = MaxpoolLayer((2, 2), overlap_tiles=False)
         outputs = maxpool_layer.process(inputs)
-        expected_outputs = numpy.array([[6, 8]])
+        expected_outputs = numpy.array([[[6, 8]]])
 
         self.assertTrue(numpy.array_equal(expected_outputs, outputs),
                         msg="Expected outputs and outputs from maxpool should match (%s) vs (%s)" % (
@@ -73,7 +73,7 @@ class NonOverlapMaxpoolLayerTest(unittest.TestCase):
         inputs = numpy.array([[1, 2, 3, 4], [5, 6, 7, 8]])
         maxpool_layer = MaxpoolLayer((2, 2), overlap_tiles=True)
         outputs = maxpool_layer.process(inputs)
-        expected_outputs = numpy.array([[6, 7, 8]])
+        expected_outputs = numpy.array([[[6, 7, 8]]])
 
         self.assertTrue(numpy.array_equal(expected_outputs, outputs),
                         msg="Expected outputs and outputs from maxpool should match (%s) vs (%s)" % (
@@ -141,13 +141,14 @@ class MeanpoolLayerTest(unittest.TestCase):
         layer = MeanpoolLayer((2, 3))
         input = numpy.fromiter(range(1, 25), dtype=dtype('f8')).reshape((4, 6))
         results = layer.process(input, remember_inputs=False)
-        expected_results = numpy.asarray([[mean([1, 2, 3, 7, 8, 9]), mean([4, 5, 6, 10, 11, 12])],
-                                          [mean([13, 14, 15, 19, 20, 21]), mean([16, 17, 18, 22, 23, 24])]])
+        expected_results = numpy.asarray([[[mean([1, 2, 3, 7, 8, 9]), mean([4, 5, 6, 10, 11, 12])],
+                                           [mean([13, 14, 15, 19, 20, 21]), mean([16, 17, 18, 22, 23, 24])]]])
         self.assertEqual(results.shape, expected_results.shape, "Results and expected results should be the same shape")
         for i in range(results.shape[0]):
             for j in range(results.shape[1]):
-                self.assertEqual(results[i, j], expected_results[i, j],
-                                 "Results and expected results differ at spot (%d, %d)" % (i, j))
+                for k in range(results.shape[2]):
+                    self.assertEqual(results[i, j, k], expected_results[i, j, k],
+                                     "Results and expected results differ at spot (%d, %d, %d)" % (i, j, k))
 
     def test_backpropagation_is_correct_with_2x3_tile(self):
         layer = MeanpoolLayer((2, 3))
@@ -165,28 +166,57 @@ class MeanpoolLayerTest(unittest.TestCase):
 
 
 class ConvolutionalLayerTest(unittest.TestCase):
+
+    def test_convolutionallayer_with_2d_input_gives_3d_output(self):
+        layer = ConvolutionalLayer((2, 2), num_filters=1)
+        inputs = numpy.random.rand(4, 5)
+        results = layer.process(inputs, remember_inputs=False)
+        self.assertSequenceEqual((1, 3, 4), results.shape)
+
+    def test_convolutionallayer_with_3d_input_gives_3d_output(self):
+        layer = ConvolutionalLayer((2, 2), num_filters=1)
+        inputs = numpy.random.rand(2, 4, 5)
+        results = layer.process(inputs, remember_inputs=False)
+        self.assertSequenceEqual((2, 3, 4), results.shape)
+
     def test_convolutional_layer_with_known_weight_gives_predicted_results(self):
-        layer = ConvolutionalLayer((2, 2))
-        layer.filter_weights = numpy.array([[1, 2], [3, 4]])  # implementation-dependent
+        layer = ConvolutionalLayer((2, 2), num_filters=1)
+        layer.filters = [numpy.array([[1, 2], [3, 4]])]  # implementation-dependent
         results = layer.process(numpy.array([[1, 1, 5], [2, 2, 2], [1, 1, 1]]))
-        expected_results = numpy.array([[1 * 4 + 1 * 3 + 2 * 2 + 2 * 1, 1 * 4 + 5 * 3 + 2 * 2 + 2 * 1],
-                                        [2 * 4 + 2 * 3 + 1 * 2 + 1 * 1, 2 * 4 + 2 * 3 + 1 * 2 + 1 * 1]])
+        expected_results = numpy.array([[[1 * 4 + 1 * 3 + 2 * 2 + 2 * 1, 1 * 4 + 5 * 3 + 2 * 2 + 2 * 1],
+                                         [2 * 4 + 2 * 3 + 1 * 2 + 1 * 1, 2 * 4 + 2 * 3 + 1 * 2 + 1 * 1]]])
         self.assertEqual(results.shape, expected_results.shape, "Results and expected results should be the same shape")
         for i in range(results.shape[0]):
             for j in range(results.shape[1]):
-                self.assertEqual(results[i, j], expected_results[i, j],
-                                 "Results and expected results differ at spot (%d, %d)" % (i, j))
+                for k in range(results.shape[2]):
+                    self.assertEqual(results[i, j, k], expected_results[i, j, k],
+                                     "Results and expected results differ at spot (%d, %d, %d)" % (i, j, k))
+
+    def test_convolutional_layer_with_known_weights_and_two_filters_gives_predicted_results(self):
+        layer = ConvolutionalLayer((2, 2), num_filters=1)
+        layer.filters = [numpy.array([[1, 2], [3, 4]]), numpy.array([[-5, -2], [-3, -4]])]  # implementation-dependent
+        results = layer.process(numpy.array([[1, 1, 5], [2, 2, 2], [1, 1, 1]]))
+        expected_results = numpy.array([[[1 * 4 + 1 * 3 + 2 * 2 + 2 * 1, 1 * 4 + 5 * 3 + 2 * 2 + 2 * 1],
+                                         [2 * 4 + 2 * 3 + 1 * 2 + 1 * 1, 2 * 4 + 2 * 3 + 1 * 2 + 1 * 1]],
+                                        [[1 * -4 + 1 * -3 + 2 * -2 + 2 * -5, 1 * -4 + 5 * -3 + 2 * -2 + 2 * -5],
+                                         [2 * -4 + 2 * -3 + 1 * -2 + 1 * -5, 2 * -4 + 2 * -3 + 1 * -2 + 1 * -5]]])
+        self.assertEqual(results.shape, expected_results.shape, "Results and expected results should be the same shape")
+        for i in range(results.shape[0]):
+            for j in range(results.shape[1]):
+                for k in range(results.shape[2]):
+                    self.assertEqual(results[i, j, k], expected_results[i, j, k],
+                                     "Results and expected results differ at spot (%d, %d, %d)" % (i, j, k))
 
     def test_convolutional_layer_learns(self):
-        layer = ConvolutionalLayer((2, 2))
-        sample_input = numpy.array([[1.0, 1, 5], [2, 0, 2], [1, 1, 1]])
+        layer = ConvolutionalLayer((2, 2), num_filters=1)
+        sample_input = numpy.array([[[1.0, 1, 5], [2, 0, 2], [1, 1, 1]]])
         results = layer.process(sample_input, remember_inputs=True)
         for _ in range(4):
-            layer.backpropagate(numpy.array([[1.0, 0], [0, -1]]))
+            layer.backpropagate(numpy.array([[[1.0, 0], [0, -1]]]))
             results2 = layer.process(sample_input, remember_inputs=True)
-        self.assertLess(results2[0, 0], results[0, 0],
+        self.assertLess(results2[0, 0, 0], results[0, 0, 0],
                         msg="Prediction for top left should have grown smaller, because error indicated it was too large (1 more than true value)")
-        self.assertGreater(results2[1, 1], results[1, 1],
+        self.assertGreater(results2[0, 1, 1], results[0, 1, 1],
                            msg="Prediction for bottom right should have grown greater, because error indicated it was too small (1 less than true value)")
 
 

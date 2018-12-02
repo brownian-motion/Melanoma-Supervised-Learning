@@ -23,3 +23,9 @@ def to_row_vector(xs):
     if type(xs) is numpy.ndarray:
         return xs.reshape(1, xs.size)
     return numpy.array(xs).reshape(1, len(xs))
+
+
+def coerce_to_3d(mat):
+    while len(mat.shape) < 3:
+        mat.resize(1, *mat.shape)
+    return mat
