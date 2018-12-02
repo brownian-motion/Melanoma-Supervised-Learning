@@ -110,9 +110,10 @@ class FullyConnectedLayerTest(unittest.TestCase):
         layer.weights = numpy.array([[1.0, 2], [4, 5]])  # field is impl-specific
         layer.bias = to_column_vector([3.0, 6])
         sample_input = [10, 11]
-        result = layer.process(sample_input)
-        layer.backpropagate(to_column_vector([1, -1]))
-        result2 = layer.process(sample_input)
+        result = layer.process(sample_input, remember_inputs=True)
+        for _ in range(3):
+            layer.backpropagate(to_column_vector([1, -1]))
+            result2 = layer.process(sample_input, remember_inputs=True)
         self.assertLess(result2[0, 0], result[0, 0],
                         msg="Prediction for top of column should have grown smaller, because error indicated it was too large (1 more than true)")
         self.assertGreater(result2[1, 0], result[1, 0],
@@ -123,9 +124,10 @@ class FullyConnectedLayerTest(unittest.TestCase):
         layer.weights = numpy.array([[1.0, 2, 3, 4], [4, 5, 6, 7]])  # field is impl-specific
         layer.bias = to_column_vector([3.0, 6])
         sample_input = [10, 11, 12, 13]
-        result = layer.process(sample_input)
-        layer.backpropagate(to_column_vector([1, -1]))
-        result2 = layer.process(sample_input)
+        result = layer.process(sample_input, remember_inputs=True)
+        for _ in range(4):
+            layer.backpropagate(to_column_vector([1, -1]))
+            result2 = layer.process(sample_input, remember_inputs=True)
         self.assertLess(result2[0, 0], result[0, 0],
                         msg="Prediction for top of column should have grown smaller, because error indicated it was too large (1 more than true)")
         self.assertGreater(result2[1, 0], result[1, 0],
@@ -148,9 +150,10 @@ class ConvolutionalLayerTest(unittest.TestCase):
     def test_convolutional_layer_learns(self):
         layer = ConvolutionalLayer((2, 2))
         sample_input = numpy.array([[1.0, 1, 5], [2, 0, 2], [1, 1, 1]])
-        results = layer.process(sample_input)
-        layer.backpropagate(numpy.array([[1.0, 0], [0, -1]]))
-        results2 = layer.process(sample_input)
+        results = layer.process(sample_input, remember_inputs=True)
+        for _ in range(4):
+            layer.backpropagate(numpy.array([[1.0, 0], [0, -1]]))
+            results2 = layer.process(sample_input, remember_inputs=True)
         self.assertLess(results2[0, 0], results[0, 0],
                         msg="Prediction for top left should have grown smaller, because error indicated it was too large (1 more than true value)")
         self.assertGreater(results2[1, 1], results[1, 1],
@@ -159,29 +162,29 @@ class ConvolutionalLayerTest(unittest.TestCase):
 
 class LinearNeuralNetworkTest(unittest.TestCase):
     def test_linear_neural_net_functions_at_all(self):
-        net = LinearNeuralNetwork()
+        net = SimpleNeuralBinaryClassifier()
         net.add_layer(ConvolutionalLayer((2, 2)))
         net.add_layer(FullyConnectedLayer(4, 2))
         net.add_layer(SoftmaxLayer())
 
-        # ignore the results, just run the process to see what comes out
-        results = net.process(numpy.array([[1.0, 1, 5], [2, 2, 2], [1, 1, 1]]))
+        # ignore the results, just run the _process to see what comes out
+        results = net._process(numpy.array([[1.0, 1, 5], [2, 2, 2], [1, 1, 1]]))
         self.assertEqual(2, results.size, msg="Number of outputs doesn't match what's expected")
         self.assertTrue(is_column_vector(results))
 
     def test_linear_neural_net_learns(self):
-        net = LinearNeuralNetwork()
+        net = SimpleNeuralBinaryClassifier()
         net.add_layer(ConvolutionalLayer((2, 2)))
         net.add_layer(FullyConnectedLayer(4, 2))
         net.add_layer(SoftmaxLayer())
 
-        # ignore the results, just run the process to see what comes out
+        # ignore the results, just run the _process to see what comes out
         sample_inputs = numpy.array([[1.0, 1, 5], [2, 2, 2], [1, 1, 1]])
-        results = net.process(sample_inputs)
+        results = net._process(sample_inputs)
         self.assertEqual(2, results.size, msg="Number of outputs doesn't match what's expected")
         self.assertTrue(is_column_vector(results))
-        net.backpropagate(numpy.add(to_column_vector([-1, 1]), results))
-        results2 = net.process(sample_inputs)
+        net._backpropagate(numpy.add(to_column_vector([-1, 1]), results))
+        results2 = net._process(sample_inputs)
         self.assertGreater(results2[0, 0], results[0, 0],
                            msg="Top output should have grown larger, because error indicated that it was too small (1 less than true value)")
         self.assertLess(results2[1, 0], results[1, 0],
