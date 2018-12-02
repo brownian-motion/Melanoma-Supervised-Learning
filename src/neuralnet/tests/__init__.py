@@ -1,5 +1,7 @@
 import unittest
 
+from numpy import mean, dtype
+
 from neuralnet import *
 
 
@@ -132,6 +134,34 @@ class FullyConnectedLayerTest(unittest.TestCase):
                         msg="Prediction for top of column should have grown smaller, because error indicated it was too large (1 more than true)")
         self.assertGreater(result2[1, 0], result[1, 0],
                            msg="Prediction for bottom of column should have grown smaller, because error indicated it was too small (1 less than true_")
+
+
+class MeanpoolLayerTest(unittest.TestCase):
+    def test_computes_means_correctly_with_2x3_tile(self):
+        layer = MeanpoolLayer((2, 3))
+        input = numpy.fromiter(range(1, 25), dtype=dtype('f8')).reshape((4, 6))
+        results = layer.process(input, remember_inputs=False)
+        expected_results = numpy.asarray([[mean([1, 2, 3, 7, 8, 9]), mean([4, 5, 6, 10, 11, 12])],
+                                          [mean([13, 14, 15, 19, 20, 21]), mean([16, 17, 18, 22, 23, 24])]])
+        self.assertEqual(results.shape, expected_results.shape, "Results and expected results should be the same shape")
+        for i in range(results.shape[0]):
+            for j in range(results.shape[1]):
+                self.assertEqual(results[i, j], expected_results[i, j],
+                                 "Results and expected results differ at spot (%d, %d)" % (i, j))
+
+    def test_backpropagation_is_correct_with_2x3_tile(self):
+        layer = MeanpoolLayer((2, 3))
+        error = numpy.asarray([[1, 2], [-2, -1]])
+        expected_error = numpy.asarray(
+            [[1, 1, 1, 2, 2, 2], [1, 1, 1, 2, 2, 2],
+             [-2, -2, -2, -1, -1, -1], [-2, -2, -2, -1, -1, -1]]) / (2 * 3)
+        results = layer.backpropagate(error)
+        self.assertEqual(results.shape, expected_error.shape,
+                         "Calculated error and expected error should be the same shape")
+        for i in range(results.shape[0]):
+            for j in range(results.shape[1]):
+                self.assertEqual(results[i, j], expected_error[i, j],
+                                 "Calculated error and expected error differ at spot (%d, %d)" % (i, j))
 
 
 class ConvolutionalLayerTest(unittest.TestCase):

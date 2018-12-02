@@ -253,6 +253,14 @@ class MeanpoolLayer(AbstractPoolingLayer):
     def __init__(self, tile_shape, overlap_tiles=False):
         super().__init__(tile_shape, func=numpy.mean, overlap_tiles=overlap_tiles)
 
+    def backpropagate(self, error):
+        assert not self._overlap_tiles  # this algo can only handle isolated tiles
+        last_error = error
+        for i in range(len(self.tile_shape)):
+            last_error = numpy.repeat(last_error, repeats=self.tile_shape[i], axis=i)
+        return last_error / numpy.prod(self.tile_shape)
+
+
 
 # TODO: use scipy.signal.convolve
 class ConvolutionalLayer:

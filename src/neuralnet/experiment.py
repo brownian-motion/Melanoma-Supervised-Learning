@@ -12,10 +12,12 @@ def main():
     net = SimpleNeuralBinaryClassifier()
     # net.add_layer(MinpoolLayer((2, 2), overlap_tiles=False))  # take out border
     # net.add_layer(MeanpoolLayer((2, 2), overlap_tiles=False))  # make the image smaller
+    net.add_layer(ConvolutionalLayer((5, 5), 0.01))
+    net.add_layer(MeanpoolLayer((4, 4), overlap_tiles=False))
     net.add_layer(ConvolutionalLayer((3, 3), 0.01))
-    net.add_layer(ConvolutionalLayer((3, 3), 0.01))
+    dim = (STANDARD_IMAGE_LENGTH - 5 + 1) // 4 - 3 + 1
     net.add_layer(
-        FullyConnectedLayer((STANDARD_IMAGE_LENGTH - 6 + 2) * (STANDARD_IMAGE_LENGTH - 6 + 2), 12, 0.01, 'sigmoid'))
+        FullyConnectedLayer(dim * dim, 12, 0.01, 'sigmoid'))
     net.add_layer(
         FullyConnectedLayer(12, 4, 0.01, 'sigmoid'))
     net.add_layer(FullyConnectedLayer(4, 2, 0.01, 'relu'))
