@@ -7,6 +7,8 @@ import cv2
 
 from images.cropping import crop_to_centered_square
 
+STANDARD_IMAGE_LENGTH = 768
+
 
 class Sample:
     def __init__(self, name, diagnosis, image_dim, filename):
@@ -21,14 +23,14 @@ class Sample:
         For example, if this image is 1000x760, then it returns a 760x760x3 matrix.
         :return: a square NumPy matrix of the RGB triplets in the central square of this Sample's image.
         '''
-        return crop_to_centered_square(self.get_image_raw())
+        return cv2.resize(crop_to_centered_square(self.get_image_raw()), (STANDARD_IMAGE_LENGTH, STANDARD_IMAGE_LENGTH))
 
     def get_image_raw(self):
         return cv2.imread(self.filename)
 
     def get_grayscale_image(self):
         '''
-        Returns a NumPy matrix of grayscale valeus for each pixel
+        Returns a NumPy matrix of grayscale values for each pixel
         :return:
         '''
         return cv2.cvtColor(self.get_image(), cv2.COLOR_BGR2GRAY)
