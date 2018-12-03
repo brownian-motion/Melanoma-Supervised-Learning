@@ -12,3 +12,9 @@ def binary_cross_entropy(yhat, y):
         return -log(1 - yhat)
     else:
         raise ValueError("Unexpected actual (measured) value for binary output: %s" % y)
+
+
+def total_cross_entropy(yhats, ys):
+    if len(ys) != len(yhats):
+        raise ValueError("Predictions and observations must have the same length")
+    return sum(binary_cross_entropy(yhats[i], ys[i]) for i in range(len(ys)))

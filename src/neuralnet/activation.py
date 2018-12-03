@@ -7,8 +7,7 @@ def scalar_relu_deriv(x):
     return 1 if x > 0 else 0
 
 
-def vec_relu_deriv(xs):
-    return map_function_numpy(scalar_relu_deriv, xs)
+vec_relu_deriv = numpy.vectorize(scalar_relu_deriv)
 
 
 def scalar_relu(x):
@@ -37,7 +36,7 @@ def scalar_sigmoid(x):
 
 
 def vec_sigmoid(xs):
-    return map_function_numpy(scalar_sigmoid, xs)
+    return 1 / (1 + numpy.exp(-xs))
 
 
 def scalar_sigmoid_deriv(x):
@@ -45,11 +44,4 @@ def scalar_sigmoid_deriv(x):
     return (sigmoid - 1) * sigmoid
 
 
-def vec_sigmoid_deriv(xs):
-    return map_function_numpy(scalar_sigmoid_deriv, xs)
-
-
-def map_function_numpy(func, vec):
-    if type(vec) is not numpy.ndarray:
-        vec = numpy.array(vec)
-    return numpy.fromiter((func(out) for out in vec), vec.dtype).reshape(vec.shape)
+vec_sigmoid_deriv = numpy.vectorize(scalar_sigmoid_deriv)
