@@ -415,8 +415,7 @@ class SimpleNeuralBinaryClassifier:
         for i in range(len(X)):
             print("Making prediction for sample %d" % i)
             xrow = X[i]
-            prediction = self._process(xrow,
-                                       remember_inputs=False)
+            prediction = self._process(xrow, remember_inputs=False)
             yhat.append(prediction.flatten())
 
         yhat = numpy.asarray(yhat)

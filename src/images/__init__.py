@@ -87,3 +87,9 @@ class Sample:
             (acquisition_data[u'pixelsX'], acquisition_data[u'pixelsY']),
             os.path.dirname(file.name) + "/" + sample_json[u'name'] + ".jpg"
         )
+
+
+def move_color_channel_to_first_axis(img):
+    img = numpy.swapaxes(img, 2, 1)  # move color channel from axis 2 -> 1
+    img = numpy.swapaxes(img, 1, 0)  # move color channel from axis 1 -> 0
+    return img

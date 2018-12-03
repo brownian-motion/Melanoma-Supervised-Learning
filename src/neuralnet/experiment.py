@@ -5,7 +5,7 @@ from neuralnet import *
 
 
 def main():
-    samples = Sample.get_samples("../../ISIC-images/UDA-1")
+    samples = Sample.get_samples("../../ISIC-images/UDA-1")[:20]
 
     # for sample in samples:
     #     print("(%4d, %4d) - %s" % (sample.image_dim[0], sample.image_dim[1], sample.diagnosis))
@@ -18,7 +18,7 @@ def main():
     net.add_layer(ConvolutionalLayer((3, 3), num_filters=4, training_rate=0.5))
     net.add_layer(MeanpoolLayer((3, 3), overlap_tiles=False))
     dim = ((STANDARD_IMAGE_LENGTH - 5 + 1) // 4 - 3 + 1) // 3
-    net.add_layer(FullyConnectedLayer(6 * 4 * dim * dim, 12, training_rate=0.1, activation_function_name='relu'))
+    net.add_layer(FullyConnectedLayer(3 * 6 * 4 * dim * dim, 12, training_rate=0.1, activation_function_name='relu'))
     net.add_layer(FullyConnectedLayer(12, 12, training_rate=0.01, activation_function_name='relu'))
     net.add_layer(FullyConnectedLayer(12, 2, training_rate=0.01, activation_function_name='relu'))
     net.add_layer(SoftmaxLayer())
@@ -30,7 +30,7 @@ def main():
     neg_entropies = []
     neg_sample_nums = []
 
-    sample_images = [s.get_grayscale_image() / 256 for s in samples]
+    sample_images = [move_color_channel_to_first_axis(s.get_image() / 256) for s in samples]
     sample_ys = [1 if s.diagnosis == "melanoma" else 0 for s in samples]
 
     net.fit(sample_images, sample_ys)
