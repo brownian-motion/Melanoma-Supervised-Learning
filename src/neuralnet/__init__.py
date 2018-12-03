@@ -161,11 +161,11 @@ class FullyConnectedLayer:
 
     @staticmethod
     def _make_random_weights(num_ins, num_outs):
-        return numpy.random.rand(num_outs, num_ins)
+        return numpy.random.rand(num_outs, num_ins) / (num_ins * num_outs)
 
     @staticmethod
     def _make_bias(num_outs):
-        return numpy.random.rand(num_outs, 1)  # second dimension says num_cols = 1, so a col vector
+        return numpy.random.rand(num_outs, 1) / num_outs  # second dimension says num_cols = 1, so a col vector
 
     def process(self, inputs, remember_inputs=False):
         intermediate = self._compute_neural_output(inputs)
@@ -210,6 +210,14 @@ class FullyConnectedLayer:
         assert last_layers_error.size == self.num_outs
 
         gradient = numpy.matmul(error, to_row_vector(last_in))
+        print("        Finished backpropagation for %5d x %2d dense layer "
+              "w/ wt. updates %.1E to %.1E (avg. wt. %.1E), "
+              "bias updates %.1E to %.1E (avg. bias %.1E)" % (
+                  self.num_ins, self.num_outs,
+                  self.training_rate * numpy.min(gradient), self.training_rate * numpy.max(gradient),
+                  numpy.average(self.weights),
+                  self.training_rate * numpy.min(error), self.training_rate * numpy.max(error),
+                  numpy.average(self.bias)))
         assert gradient.shape == self.weights.shape
         self.weights -= self.training_rate * gradient
         assert error.shape == self.bias.shape
@@ -266,13 +274,13 @@ class MeanpoolLayer(AbstractPoolingLayer):
         last_error = error
         for i in range(len(self.tile_shape)):
             last_error = numpy.repeat(last_error, repeats=self.tile_shape[i], axis=i)
-        return last_error / numpy.prod(self.tile_shape)
+        return last_error  # / numpy.prod(self.tile_shape) # removed to enable faster backprop
 
 
 class ConvolutionalLayer:
     def __init__(self, filter_shape, num_filters=1, training_rate=0.01):
         self.training_rate = training_rate
-        self.filters = [numpy.random.rand(*filter_shape) for _ in range(num_filters)]
+        self.filters = [numpy.random.rand(*filter_shape) / numpy.prod(filter_shape) for _ in range(num_filters)]
         if len(filter_shape) is not 2:
             raise ValueError("Filters must be 2-dimensional")
         self.filter_shape = filter_shape
@@ -311,7 +319,16 @@ class ConvolutionalLayer:
                                             mode='valid', method='direct')
                 # we don't update the filter until we've totaled for each layer, or else the changes would affect each gradient
             self.filters[filter_num] -= self.training_rate * numpy.flip(weight_gradient)
+            print("            Finished backpropagation for %dx%d Conv. layer, filter %d, "
+                  "with gradient updates from %.1E to %.1E (avg. of gradient is %.1E)" % (
+                      self.filter_shape[0], self.filter_shape[1], filter_num,
+                      self.training_rate * numpy.min(weight_gradient), self.training_rate * numpy.max(weight_gradient),
+                      numpy.average(self.filters[filter_num])),
+                  flush=True)
 
+        print("        Finish backprop for Conv. layer with passthrough error from %.1E to %.1E" % (
+            numpy.min(last_error), numpy.max(last_error)),
+              flush=True)
         return last_error
 
     def process(self, inputs, remember_inputs=False):
@@ -373,11 +390,11 @@ class SimpleNeuralBinaryClassifier:
                 else:
                     neg_nums.append(sample_num)
                     neg_entropies.append(entropy)
-                print("   Sample %3d (%8s): %.0f%% prediction melanoma (error = %.4f)" % (
+                print("   Finished sample %3d (%8s): %.0f%% prediction melanoma (error = %.4f)" % (
                     sample_num, "melanoma" if y[sample_num] else "benign", yhat * 100, entropy), flush=True)
-            print("Learning from results of prediction...", end=" ", flush=True)
+            print("Learning from results of prediction...", flush=True)
             for sample_num in reversed(range(batch_start, min(y.size, batch_start + batch_size))):
-                print(sample_num, end=" ", flush=True)
+                print("    %d" % sample_num, flush=True)
                 if y[sample_num] == 1:
                     true_outputs = to_column_vector([0, 1])
                 elif y[sample_num] == 0:
@@ -395,8 +412,11 @@ class SimpleNeuralBinaryClassifier:
     def predict(self, X):
         yhat = []
 
-        for xrow in X:
-            prediction = self._process(xrow, remember_inputs=False)
+        for i in range(len(X)):
+            print("Making prediction for sample %d" % i)
+            xrow = X[i]
+            prediction = self._process(xrow,
+                                       remember_inputs=False)
             yhat.append(prediction.flatten())
 
         yhat = numpy.asarray(yhat)
@@ -406,6 +426,7 @@ class SimpleNeuralBinaryClassifier:
     def _process(self, inputs, remember_inputs=True):
         for layer in self.layers:
             inputs = layer.process(inputs, remember_inputs=remember_inputs)
+            print("        %s has average output %.2f" % (type(layer).__name__, numpy.average(inputs)))
         return inputs
 
     def _backpropagate(self, true_outputs):

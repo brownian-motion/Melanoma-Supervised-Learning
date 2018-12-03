@@ -5,22 +5,22 @@ from neuralnet import *
 
 
 def main():
-    samples = Sample.get_samples("../../ISIC-images/UDA-1")[:20]
+    samples = Sample.get_samples("../../ISIC-images/UDA-1")
+
     # for sample in samples:
     #     print("(%4d, %4d) - %s" % (sample.image_dim[0], sample.image_dim[1], sample.diagnosis))
     #
     net = SimpleNeuralBinaryClassifier()
     # net.add_layer(MinpoolLayer((2, 2), overlap_tiles=False))  # take out border
     # net.add_layer(MeanpoolLayer((2, 2), overlap_tiles=False))  # make the image smaller
-    net.add_layer(ConvolutionalLayer((5, 5), num_filters=6, training_rate=0.01))
+    net.add_layer(ConvolutionalLayer((5, 5), num_filters=6, training_rate=0.5))
     net.add_layer(MeanpoolLayer((4, 4), overlap_tiles=False))
-    net.add_layer(ConvolutionalLayer((3, 3), num_filters=4, training_rate=0.01))
-    dim = (STANDARD_IMAGE_LENGTH - 5 + 1) // 4 - 3 + 1
-    net.add_layer(
-        FullyConnectedLayer(24 * dim * dim, 12, 0.01, 'sigmoid'))
-    net.add_layer(
-        FullyConnectedLayer(12, 4, 0.01, 'sigmoid'))
-    net.add_layer(FullyConnectedLayer(4, 2, 0.01, 'relu'))
+    net.add_layer(ConvolutionalLayer((3, 3), num_filters=4, training_rate=0.5))
+    net.add_layer(MeanpoolLayer((3, 3), overlap_tiles=False))
+    dim = ((STANDARD_IMAGE_LENGTH - 5 + 1) // 4 - 3 + 1) // 3
+    net.add_layer(FullyConnectedLayer(6 * 4 * dim * dim, 12, training_rate=0.1, activation_function_name='relu'))
+    net.add_layer(FullyConnectedLayer(12, 12, training_rate=0.01, activation_function_name='relu'))
+    net.add_layer(FullyConnectedLayer(12, 2, training_rate=0.01, activation_function_name='relu'))
     net.add_layer(SoftmaxLayer())
 
     random.shuffle(samples)
