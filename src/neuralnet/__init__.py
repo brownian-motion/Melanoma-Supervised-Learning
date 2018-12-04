@@ -1,6 +1,9 @@
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
-from scipy.signal import convolve
+from scipy.signal import convolve  # to perform convolution
+# to perform pooling,
+# see https://stackoverflow.com/questions/42463172/how-to-perform-max-mean-pooling-on-a-2d-array-using-numpy
+from skimage.measure import block_reduce
 
 from cross_entropy import binary_cross_entropy
 from images import batch
@@ -119,13 +122,7 @@ class AbstractConvolutionalLayer:
 
     def convolve2d(self, input_mat, convolution_func):
         assert len(input_mat.shape) == 2
-        output_shape = self._compute_output_shape(input_mat.shape, self.tile_shape)
-        output = numpy.zeros(output_shape)
-        for i in range(output_shape[0]):
-            for j in range(output_shape[1]):
-                tile = self._get_tile((i, j), input_mat, self.tile_shape)
-                output[i, j] = convolution_func(tile)
-        return output
+        return block_reduce(input_mat, block_size=self.tile_shape, func=convolution_func)
 
     def _compute_output_shape(self, input_shape, tile_shape):
         if self._overlap_tiles:
