@@ -7,16 +7,22 @@ from neuralnet.activation import *
 from neuralnet.vector_utils import *
 
 
-class SoftmaxLayer:
+class ActivationLayer:
     '''
     Implements a softmax neural network layer.
     This normalizes input values to the range [0,1],
     such that the sum of the outputs add to 1.
     '''
 
+    def __init__(self, activation_function, activation_deriv):
+        self.activation_function = activation_function
+        self.activation_deriv = activation_deriv
+        self._last_inputs = []
+        self._last_outputs = []
+
     def process(self, inputs, remember_inputs=False):
         '''
-        Performs a softmax normalization on the given inputs.
+        Performs an activation on the given inputs.
         Given an array of N input values,
         normalizes those inputs to the range [0,1]
         such that they sum to 1,
@@ -27,11 +33,34 @@ class SoftmaxLayer:
         if not is_column_vector(inputs):
             inputs = to_column_vector(inputs)
         assert is_column_vector(inputs)
-        self._last_inputs = inputs
-        self._last_outputs = to_column_vector(vec_softmax(inputs))
-        assert is_column_vector(self._last_outputs)
-        assert self._last_outputs.size == inputs.size
-        return self._last_outputs
+
+        results = to_column_vector(self.activation_function(inputs))
+        assert is_column_vector(results)
+        assert results.size == inputs.size
+
+        if remember_inputs:
+            self._last_inputs.append(inputs)
+            self._last_outputs.append(results)
+
+        return results
+
+    def backpropagate(self, true_ys):
+        '''
+        Updates any relevant weights (none, for this simple activation layer)
+        and then returns the error for the previous layer.
+        :param true_ys: the error in what this layer output
+        :return: the error for the previous layer, calculated using the true observations,
+        the remembered last inputs and outputs through this neuron,
+        and the derivative of the activation function.
+        '''
+        last_outputs = self._last_outputs.pop()
+        last_inputs = self._last_inputs.pop()
+        return (true_ys - last_outputs) * self.activation_deriv(last_inputs)
+
+
+class SoftmaxLayer(ActivationLayer):
+    def __init__(self):
+        super().__init__(vec_softmax, vec_softmax_deriv)
 
     def backpropagate(self, true_ys):
         '''
@@ -40,7 +69,13 @@ class SoftmaxLayer:
         :param true_ys: the error in what this layer output
         :return: the error for the previous layer
         '''
-        return true_ys - self._last_outputs
+        last_outputs = self._last_outputs.pop()
+        return true_ys - last_outputs
+
+
+class SigmoidLayer(ActivationLayer):
+    def __init__(self):
+        super().__init__(vec_sigmoid, vec_sigmoid_deriv)
 
 
 class AbstractConvolutionalLayer:
@@ -56,8 +91,8 @@ class AbstractConvolutionalLayer:
                 "This pooling layer implementation only knows how to handle 2-D tiles, inputs, and outputs")
         self.tile_shape = tile_shape
         self._overlap_tiles = overlap_tiles
-        self._last_input = None
-        self._last_output = None
+        self._last_inputs = []
+        self._last_outputs = []
 
     def _get_tile(self, tile_coord, input, tile_shape):
         if len(tile_shape) != 2 or len(tile_coord) != 2:
@@ -138,8 +173,8 @@ class AbstractPoolingLayer(AbstractConvolutionalLayer):
         result = numpy.array(result)
         assert len(result.shape) == 3
         if remember_inputs:
-            self._last_input = inputs
-            self._last_output = result
+            self._last_inputs.append(inputs)
+            self._last_outputs.append(result)
         return result
 
     # TODO: implement backpropagation by remembering which cell was used for output and backpropagating to there
@@ -161,11 +196,11 @@ class FullyConnectedLayer:
 
     @staticmethod
     def _make_random_weights(num_ins, num_outs):
-        return numpy.random.rand(num_outs, num_ins)
+        return (2 * numpy.random.rand(num_outs, num_ins) - 1)  # / (num_ins * num_outs)
 
     @staticmethod
     def _make_bias(num_outs):
-        return numpy.random.rand(num_outs, 1)  # second dimension says num_cols = 1, so a col vector
+        return numpy.random.rand(num_outs, 1) / num_outs  # second dimension says num_cols = 1, so a col vector
 
     def process(self, inputs, remember_inputs=False):
         intermediate = self._compute_neural_output(inputs)
@@ -210,6 +245,14 @@ class FullyConnectedLayer:
         assert last_layers_error.size == self.num_outs
 
         gradient = numpy.matmul(error, to_row_vector(last_in))
+        print("        Finished backpropagation for %5d x %2d dense layer "
+              "w/ wt. updates %.1E to %.1E (avg. wt. %.1E), "
+              "bias updates %.1E to %.1E (avg. bias %.1E)" % (
+                  self.num_ins, self.num_outs,
+                  self.training_rate * numpy.min(gradient), self.training_rate * numpy.max(gradient),
+                  numpy.average(self.weights),
+                  self.training_rate * numpy.min(error), self.training_rate * numpy.max(error),
+                  numpy.average(self.bias)))
         assert gradient.shape == self.weights.shape
         self.weights -= self.training_rate * gradient
         assert error.shape == self.bias.shape
@@ -263,6 +306,10 @@ class MeanpoolLayer(AbstractPoolingLayer):
 
     def backpropagate(self, error):
         assert not self._overlap_tiles  # this algo can only handle isolated tiles
+        # remove remembered throughput to prevent memory leak
+        if len(self._last_inputs) != 0:
+            self._last_inputs.pop()
+            self._last_outputs.pop()
         last_error = error
         for i in range(len(self.tile_shape)):
             last_error = numpy.repeat(last_error, repeats=self.tile_shape[i], axis=i)
@@ -272,7 +319,8 @@ class MeanpoolLayer(AbstractPoolingLayer):
 class ConvolutionalLayer:
     def __init__(self, filter_shape, num_filters=1, training_rate=0.01):
         self.training_rate = training_rate
-        self.filters = [numpy.random.rand(*filter_shape) for _ in range(num_filters)]
+        self.filters = [(numpy.random.rand(*filter_shape) - 0.5) * 2 / numpy.prod(filter_shape) for _ in
+                        range(num_filters)]
         if len(filter_shape) is not 2:
             raise ValueError("Filters must be 2-dimensional")
         self.filter_shape = filter_shape
@@ -300,8 +348,8 @@ class ConvolutionalLayer:
             weight_gradient = numpy.zeros_like(self.filters[filter_num])
             # total up the gradient for this filter for each input layer
             for input_layer_num in range(num_input_layers):  # for loops should match the relative order in process()
-                for h in range(error.shape[0]):
-                    for w in range(error.shape[1]):
+                for h in range(error.shape[1]):
+                    for w in range(error.shape[2]):
                         last_error[input_layer_num, h:h + tile_width, w:w + tile_width] += \
                             self.filters[filter_num] * error[filter_num * num_input_layers + input_layer_num, h, w]
 
@@ -311,7 +359,16 @@ class ConvolutionalLayer:
                                             mode='valid', method='direct')
                 # we don't update the filter until we've totaled for each layer, or else the changes would affect each gradient
             self.filters[filter_num] -= self.training_rate * numpy.flip(weight_gradient)
+            print("            Finished backpropagation for %dx%d Conv. layer, filter %d, "
+                  "with gradient updates from %.1E to %.1E (avg. of filter is %.1E)" % (
+                      self.filter_shape[0], self.filter_shape[1], filter_num,
+                      self.training_rate * numpy.min(weight_gradient), self.training_rate * numpy.max(weight_gradient),
+                      numpy.average(self.filters[filter_num])),
+                  flush=True)
 
+        print("        Finish backprop for Conv. layer with passthrough error from %.1E to %.1E" % (
+            numpy.min(last_error), numpy.max(last_error)),
+              flush=True)
         return last_error
 
     def process(self, inputs, remember_inputs=False):
@@ -365,7 +422,7 @@ class SimpleNeuralBinaryClassifier:
         for batch_start in range(0, y.size, batch_size):
             print("Predicting batch starting at sample %d" % batch_start)
             for sample_num in range(batch_start, min(y.size, batch_start + batch_size)):
-                yhat = self._process(X[sample_num], remember_inputs=True)[1, 0]
+                yhat = self._process(X[sample_num], remember_inputs=True)
                 entropy = binary_cross_entropy(yhat, y[sample_num])
                 if y[sample_num] == 1:
                     pos_nums.append(sample_num)
@@ -373,15 +430,15 @@ class SimpleNeuralBinaryClassifier:
                 else:
                     neg_nums.append(sample_num)
                     neg_entropies.append(entropy)
-                print("   Sample %3d (%8s): %.0f%% prediction melanoma (error = %.4f)" % (
+                print("   Finished sample %3d (%8s): %.1f%% prediction melanoma (error = %.4f)" % (
                     sample_num, "melanoma" if y[sample_num] else "benign", yhat * 100, entropy), flush=True)
-            print("Learning from results of prediction...", end=" ", flush=True)
+            print("Learning from results of prediction...", flush=True)
             for sample_num in reversed(range(batch_start, min(y.size, batch_start + batch_size))):
-                print(sample_num, end=" ", flush=True)
+                print("    %d" % sample_num, flush=True)
                 if y[sample_num] == 1:
-                    true_outputs = to_column_vector([0, 1])
+                    true_outputs = to_column_vector([1])
                 elif y[sample_num] == 0:
-                    true_outputs = to_column_vector([1, 0])
+                    true_outputs = to_column_vector([0])
                 else:
                     raise ValueError("Unexpected true observation %s for sample %d. "
                                      "This neural net can only perform "
@@ -395,7 +452,9 @@ class SimpleNeuralBinaryClassifier:
     def predict(self, X):
         yhat = []
 
-        for xrow in X:
+        for i in range(len(X)):
+            print("Making prediction for sample %d" % i)
+            xrow = X[i]
             prediction = self._process(xrow, remember_inputs=False)
             yhat.append(prediction.flatten())
 
@@ -406,6 +465,7 @@ class SimpleNeuralBinaryClassifier:
     def _process(self, inputs, remember_inputs=True):
         for layer in self.layers:
             inputs = layer.process(inputs, remember_inputs=remember_inputs)
+            print("        %s has average output %.2f" % (type(layer).__name__, numpy.average(inputs)))
         return inputs
 
     def _backpropagate(self, true_outputs):

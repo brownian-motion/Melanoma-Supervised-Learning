@@ -19,6 +19,7 @@ def vec_relu(xs):
 
 
 def vec_softmax(xs):
+    xs -= numpy.min(xs)  # softmax is invariant to constant offsets, this lets us renormalize huge exponents
     exps = numpy.array([math.exp(x) for x in xs])
     return exps / sum(exps)
 
