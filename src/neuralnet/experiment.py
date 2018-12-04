@@ -54,7 +54,7 @@ def get_training_sample_images_gen(samples):
 def load_training_samples():
     samples = Sample.get_samples("../../ISIC-images/UDA-1")
     random.shuffle(samples)
-    return samples[:3]
+    return samples[:10]
 
 
 def get_sample_observations(samples):
@@ -89,8 +89,8 @@ def make_neural_net():
     num_pixels = num_layers * dim * dim
     net.add_layer(FullyConnectedLayer(num_pixels, 12, training_rate=0.1, activation_function_name='relu'))
     net.add_layer(FullyConnectedLayer(12, 12, training_rate=0.1, activation_function_name='relu'))
-    net.add_layer(FullyConnectedLayer(12, 1, training_rate=0.1, activation_function_name='relu'))
-    # todo: make dense layer activation function for sigmoid -1~1 so that output can be below .5 ever
+    net.add_layer(FullyConnectedLayer(12, 1, training_rate=0.1,
+                                      activation_function_name='identity'))  # to allow for full range of inputs into sigmoid output layer
     net.add_layer(SigmoidLayer())
     return net
 

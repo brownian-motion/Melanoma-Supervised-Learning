@@ -270,6 +270,10 @@ class FullyConnectedLayer:
             return vec_relu, vec_relu_deriv
         if activation_function_name == 'sigmoid':
             return vec_sigmoid, vec_sigmoid_deriv
+        if activation_function_name == 'sigmoid2':
+            return vec_sigmoid_2, vec_sigmoid_2_deriv
+        if activation_function_name is None or activation_function_name == 'identity' or activation_function_name == 'none':
+            return vec_identity, vec_identity_deriv
         raise ValueError("Unrecognized activation function \"%s\"" % activation_function_name)
 
 
@@ -491,7 +495,6 @@ class SimpleNeuralBinaryClassifier:
     def _process(self, inputs, remember_inputs=True):
         for layer in self.layers:
             inputs = layer.process(inputs, remember_inputs=remember_inputs)
-            print("        %s has average output %.2f" % (type(layer).__name__, numpy.average(inputs)))
         return inputs
 
     def _backpropagate(self, true_outputs):
