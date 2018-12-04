@@ -90,6 +90,9 @@ class AbstractConvolutionalLayer:
     '''
 
     def __init__(self, tile_shape, overlap_tiles=False):
+        if overlap_tiles:
+            raise ValueError("This layer no longer supports overlapping tiles, "
+                             "due to restrictions in scipy implementation of striding.")
         if len(tile_shape) != 2:
             raise ValueError(
                 "This pooling layer implementation only knows how to handle 2-D tiles, inputs, and outputs")
@@ -122,6 +125,7 @@ class AbstractConvolutionalLayer:
 
     def convolve2d(self, input_mat, convolution_func):
         assert len(input_mat.shape) == 2
+        assert not self._overlap_tiles
         return block_reduce(input_mat, block_size=self.tile_shape, func=convolution_func)
 
     def _compute_output_shape(self, input_shape, tile_shape):

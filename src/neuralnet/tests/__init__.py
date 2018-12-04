@@ -35,6 +35,14 @@ class SoftmaxUnittest(unittest.TestCase):
             self.assertAlmostEqual(expected_outputs[i], outputs[i], places=5,
                                    msg="Softmax value differs from expected at index %d" % i)
 
+    # def test_2x2_softmax_backpropagates_correct_error(self):
+    #     layer = SoftmaxLayer()
+    #     layer.process([1, 1], remember_inputs=True)
+    #     last_error = layer.backpropagate([1, 0]).flatten()
+    #     self.assertLess(last_error[0], last_error[1],
+    #                     msg="Softmax should indicate that input in first col was too low, "
+    #                         "since observation for it was higher than prediction")
+
 
 class AbstractPoolingLayerTest(unittest.TestCase):
     def test_max_of_nums_no_overlap(self):
@@ -47,16 +55,6 @@ class AbstractPoolingLayerTest(unittest.TestCase):
                         msg="Expected outputs and outputs from maxpool should match (%s) vs (%s)" % (
                             expected_outputs, outputs))
 
-    def test_max_of_nums_with_overlap(self):
-        inputs = numpy.array([[1, 2, 3, 4], [5, 6, 7, 8]])
-        maxpool_layer = AbstractPoolingLayer((2, 2), func=numpy.amax, overlap_tiles=True)
-        outputs = maxpool_layer.process(inputs)
-        expected_outputs = numpy.array([[[6, 7, 8]]])
-
-        self.assertTrue(numpy.array_equal(expected_outputs, outputs),
-                        msg="Expected outputs and outputs from maxpool should match (%s) vs (%s)" % (
-                            expected_outputs, outputs))
-
 
 class NonOverlapMaxpoolLayerTest(unittest.TestCase):
     def test_2x2_tiles_no_overlap(self):
@@ -64,16 +62,6 @@ class NonOverlapMaxpoolLayerTest(unittest.TestCase):
         maxpool_layer = MaxpoolLayer((2, 2), overlap_tiles=False)
         outputs = maxpool_layer.process(inputs)
         expected_outputs = numpy.array([[[6, 8]]])
-
-        self.assertTrue(numpy.array_equal(expected_outputs, outputs),
-                        msg="Expected outputs and outputs from maxpool should match (%s) vs (%s)" % (
-                            expected_outputs, outputs))
-
-    def test_2x2_tiles_with_overlap(self):
-        inputs = numpy.array([[1, 2, 3, 4], [5, 6, 7, 8]])
-        maxpool_layer = MaxpoolLayer((2, 2), overlap_tiles=True)
-        outputs = maxpool_layer.process(inputs)
-        expected_outputs = numpy.array([[[6, 7, 8]]])
 
         self.assertTrue(numpy.array_equal(expected_outputs, outputs),
                         msg="Expected outputs and outputs from maxpool should match (%s) vs (%s)" % (
@@ -243,20 +231,27 @@ class LinearNeuralNetworkTest(unittest.TestCase):
         self.assertEqual(2, results.size, msg="Number of outputs doesn't match what's expected")
         self.assertTrue(is_column_vector(results))
 
-    def test_linear_neural_net_learns(self):
+    def test_flat_neural_net_sigmoid_cap_learns(self):
         net = SimpleNeuralBinaryClassifier()
-        net.add_layer(ConvolutionalLayer((2, 2)))
-        net.add_layer(FullyConnectedLayer(4, 2))
-        net.add_layer(SoftmaxLayer())
+        net.add_layer(FullyConnectedLayer(2, 1))
+        net.add_layer(SigmoidLayer())
 
         # ignore the results, just run the _process to see what comes out
-        sample_inputs = numpy.array([[1.0, 1, 5], [2, 2, 2], [1, 1, 1]])
-        results = net._process(sample_inputs)
-        self.assertEqual(2, results.size, msg="Number of outputs doesn't match what's expected")
+        sample_inputs = numpy.random.rand(2, 1)
+        results = net.predict([sample_inputs])
+        self.assertEqual(1, results.size, msg="Number of outputs doesn't match what's expected")
         self.assertTrue(is_column_vector(results))
-        net._backpropagate(numpy.add(to_column_vector([-1, 1]), results))
-        results2 = net._process(sample_inputs)
-        self.assertGreater(results2[0, 0], results[0, 0],
-                           msg="Top output should have grown larger, because error indicated that it was too small (1 less than true value)")
-        self.assertLess(results2[1, 0], results[1, 0],
-                        msg="Bottom output should have grown smaller, because error indicated that it was too large (1 more than true value)")
+        net.fit([sample_inputs], [1])
+        results2 = net.predict([sample_inputs])
+        self.assertGreater(results2, results,
+                           msg="Output should have grown larger, because error indicated that it was too small (less than true value)")
+
+
+class SigmoidUnitTest(unittest.TestCase):
+    def test_sigmoid_layer_yields_correct_backprop_error(self):
+        layer = SigmoidLayer()
+        inputs = [numpy.array([0])]
+        result = layer.process(inputs, remember_inputs=True)
+        self.assertEqual(0.5, result, msg="Sigmoid is not calculating correctly")
+        error = layer.backpropagate([1])
+        self.assertGreater(0, error, msg="Sigmoid should indicate to net that its output was too low")
