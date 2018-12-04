@@ -52,9 +52,9 @@ def get_training_sample_images_gen(samples):
 
 
 def load_training_samples():
-    samples = Sample.get_samples("../../ISIC-images/UDA-1")[:3]
+    samples = Sample.get_samples("../../ISIC-images/UDA-1")
     random.shuffle(samples)
-    return samples
+    return samples[:3]
 
 
 def get_sample_observations(samples):
@@ -66,30 +66,30 @@ def make_neural_net():
     net = SimpleNeuralBinaryClassifier()
     dim = STANDARD_IMAGE_LENGTH
     num_layers = 3
-    net.add_layer(ConvolutionalLayer((5, 5), num_filters=6, training_rate=0.001))
+    net.add_layer(ConvolutionalLayer((5, 5), num_filters=6, training_rate=0.01))
     dim = dim - 5 + 1
     num_layers *= 6
     net.add_layer(MeanpoolLayer((4, 4), overlap_tiles=False))
     dim = dim // 4
-    net.add_layer(ConvolutionalLayer((3, 3), num_filters=4, training_rate=0.001))
+    net.add_layer(ConvolutionalLayer((3, 3), num_filters=4, training_rate=0.01))
     dim = dim - 3 + 1
     num_layers *= 4
     net.add_layer(MeanpoolLayer((3, 3), overlap_tiles=False))
     dim = dim // 3
-    net.add_layer(ConvolutionalLayer((4, 4), num_filters=4, training_rate=0.001))
+    net.add_layer(ConvolutionalLayer((4, 4), num_filters=4, training_rate=0.01))
     dim = dim - 4 + 1
     num_layers *= 4
     net.add_layer(MeanpoolLayer((4, 4), overlap_tiles=False))
     dim = dim // 4
-    net.add_layer(ConvolutionalLayer((4, 4), num_filters=4, training_rate=0.001))
+    net.add_layer(ConvolutionalLayer((4, 4), num_filters=4, training_rate=0.01))
     dim = dim - 4 + 1
     num_layers *= 4
     net.add_layer(MeanpoolLayer((4, 4), overlap_tiles=False))
     dim = dim // 4
     num_pixels = num_layers * dim * dim
     net.add_layer(FullyConnectedLayer(num_pixels, 12, training_rate=0.1, activation_function_name='relu'))
-    net.add_layer(FullyConnectedLayer(12, 12, training_rate=0.01, activation_function_name='relu'))
-    net.add_layer(FullyConnectedLayer(12, 1, training_rate=0.01, activation_function_name='relu'))
+    net.add_layer(FullyConnectedLayer(12, 12, training_rate=0.1, activation_function_name='relu'))
+    net.add_layer(FullyConnectedLayer(12, 1, training_rate=0.1, activation_function_name='relu'))
     # todo: make dense layer activation function for sigmoid -1~1 so that output can be below .5 ever
     net.add_layer(SigmoidLayer())
     return net
