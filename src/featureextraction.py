@@ -12,10 +12,11 @@ class FeatureExtractor:
 def make_extractor():
     return FeatureExtractor
 
-def get_features(im_arr):
+def get_features(im_arr,num_features = 64):
     """This method returns an array of features, divided
-    by four pixels of darkness, into a total of 64 features."""
-    features_list = np.histogram(im_arr, bins=64)
+    by four pixels of darkness, into a total of 64 features as default.
+    This can be changed with num_features = desired_number """
+    features_list = np.histogram(im_arr, bins=num_features)
     return features_list
 
 
