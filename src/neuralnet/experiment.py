@@ -1,20 +1,16 @@
 import random
 
-from matplotlib.patches import Patch
-from sklearn.metrics import roc_curve
-
-from graphs.performance_diagram_stuff import plot_performance_diagram
-from graphs.reliability_curve_stuff import plot_reliability_curve
+from graphs import *
 from images import *
 from neuralnet import *
 
 
 def main():
-    sample_images_iter, sample_ys = load_training_samples()
-    sample_ys = numpy.array(sample_ys)
+    samples = load_training_samples()
+    sample_ys = numpy.array(get_sample_observations(samples))
     net = make_neural_net()
-    net.fit(sample_images_iter, sample_ys)
-    yhats = net.predict(sample_images_iter)
+    net.fit(get_training_sample_images_gen(samples), sample_ys)
+    yhats = net.predict(get_training_sample_images_gen(samples))
     for i in range(len(yhats)):
         plt.plot([i, i], [sample_ys[i], yhats[i]], 'r-' if sample_ys[i] == 1 else 'b-')
     plt.title("Predictions vs. observations")
@@ -28,41 +24,42 @@ def main():
     print(yhats)
 
     plot_performance_diagram(sample_ys, yhats)
-    plt.title("Performance diagram")
+    plt.title("Performance diagram for CNN")
     plt.show()
 
     plot_reliability_curve(sample_ys, yhats)
-    plt.title("Reliability diagram")
+    plt.title("Reliability diagram for CNN")
     plt.show()
 
-    fpr, tpr, _ = roc_curve(sample_ys, yhats)
-    plt.plot([0, 1], [0, 1], '--')
-    plt.plot(fpr, tpr, 'r-')
-    plt.xlabel("Probability of false detection")
-    plt.ylabel("Probability of detection")
-    plt.title("ROC curve for CNN")
-    plt.legend(handles=[Patch(color='red', label='CNN'), Patch(color='gray', label="Random predictor")])
-    plt.show()
+    plot_roc_curve(sample_ys, yhats, "CNN")
+
+
+def load_images_iter(samples):
+    for s in samples:
+        yield move_color_channel_to_first_axis(s.get_image() / 128 - 1)
+
+
+def get_training_sample_images_gen(samples):
+    """
+    Returns a generator (for for loops) of images for each sample, appropriate for this experiment's neural net
+    :return: an iterable of images from each sample, appropriate for this experiment's neural net
+    """
+    # TODO: upsample melanoma
+    # for sample in samples:
+    #     print("(%4d, %4d) - %s" % (sample.image_dim[0], sample.image_dim[1], sample.diagnosis))
+    # this normalizes each color from 0~256 to -1~1, and makes the color channel the primary axis.
+    return (move_color_channel_to_first_axis(s.get_image() / 128 - 1) for s in samples)
 
 
 def load_training_samples():
-    '''
-    Returns two items:
-    an iterable (currently a list, soon a generator expression / iterator for for loops) of images for each sample,
-    and a list of observed classes for each sample (1 for melanoma, 0 otherwise)
-    :return: an iterable of images (currently a list), and a list of classes for each image
-    '''
-    samples = Sample.get_samples("../../ISIC-images/UDA-1")[:20]
-    # TODO: upsample melanoma
+    samples = Sample.get_samples("../../ISIC-images/UDA-1")[:3]
     random.shuffle(samples)
-    # for sample in samples:
-    #     print("(%4d, %4d) - %s" % (sample.image_dim[0], sample.image_dim[1], sample.diagnosis))
+    return samples
 
-    # TODO: make this return a generator expression. That is, make the neural net accept iterables (that can be iterated only once)
-    # this normalizes each color from 0~256 to -1~1, and makes the color channel the primary axis.
-    sample_images = [move_color_channel_to_first_axis(s.get_image() / 128 - 1) for s in samples]
+
+def get_sample_observations(samples):
     sample_ys = [1 if s.diagnosis == "melanoma" else 0 for s in samples]
-    return sample_images, sample_ys
+    return sample_ys
 
 
 def make_neural_net():

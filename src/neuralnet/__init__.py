@@ -3,6 +3,7 @@ from matplotlib.patches import Patch
 from scipy.signal import convolve
 
 from cross_entropy import binary_cross_entropy
+from images import batch
 from neuralnet.activation import *
 from neuralnet.vector_utils import *
 
@@ -402,65 +403,77 @@ class SimpleNeuralBinaryClassifier:
     def __init__(self):
         self.layers = []
 
-    def fit(self, X, y, batch_size=None):
-        if type(y) is not numpy.ndarray:
-            y = numpy.asarray(y)
+    def fit(self, imgs, obs, batch_size=None):
+        if type(obs) is not numpy.ndarray:
+            obs = numpy.asarray(obs)
         if batch_size is None or batch_size <= 0:
-            if y.size > 10:
-                batch_size = min(y.size // 5, 10)
+            if obs.size > 10:
+                batch_size = min(obs.size // 5, 10)
             else:
-                batch_size = y.size
+                batch_size = obs.size
             print("Training with batch size %d" % batch_size)
-        if len(X) != y.size:
-            raise ValueError("Number of samples in X must equal the number of observations in y")
 
         pos_nums = []
         pos_entropies = []
         neg_nums = []
         neg_entropies = []
 
-        for batch_start in range(0, y.size, batch_size):
+        batch_start = 0
+        batch_entropies = []
+        for bat in batch(imgs, n=batch_size):
             print("Predicting batch starting at sample %d" % batch_start)
-            for sample_num in range(batch_start, min(y.size, batch_start + batch_size)):
-                yhat = self._process(X[sample_num], remember_inputs=True)
-                entropy = binary_cross_entropy(yhat, y[sample_num])
-                if y[sample_num] == 1:
-                    pos_nums.append(sample_num)
+            total_batch_entropy = 0.0
+            for i in range(len(bat)):
+                sample_num = batch_start + i
+                y = obs[sample_num]
+                yhat = self._process(bat[i], remember_inputs=True)
+                entropy = binary_cross_entropy(yhat, y)
+                total_batch_entropy += total_batch_entropy
+                if y == 1:
+                    pos_nums.append(1)
                     pos_entropies.append(entropy)
                 else:
-                    neg_nums.append(sample_num)
+                    neg_nums.append(0)
                     neg_entropies.append(entropy)
                 print("   Finished sample %3d (%8s): %.1f%% prediction melanoma (error = %.4f)" % (
-                    sample_num, "melanoma" if y[sample_num] else "benign", yhat * 100, entropy), flush=True)
+                    sample_num, "melanoma" if y else "benign", yhat * 100, entropy), flush=True)
+            batch_entropies.append(total_batch_entropy / len(bat))
             print("Learning from results of prediction...", flush=True)
-            for sample_num in reversed(range(batch_start, min(y.size, batch_start + batch_size))):
-                print("    %d" % sample_num, flush=True)
-                if y[sample_num] == 1:
+            for i in reversed(range(len(bat))):
+                sample_num = batch_start + i
+                print("    Learning from sample %d" % sample_num, flush=True)
+                y = obs[sample_num]
+                if y == 1:
                     true_outputs = to_column_vector([1])
-                elif y[sample_num] == 0:
+                elif y == 0:
                     true_outputs = to_column_vector([0])
                 else:
-                    raise ValueError("Unexpected true observation %s for sample %d. "
+                    raise ValueError("Unexpected observation %s for sample %d. "
                                      "This neural net can only perform "
-                                     "binary classification." % (y[sample_num], sample_num))
+                                     "binary classification." % (y, sample_num))
                 self._backpropagate(true_outputs)
             print()
+            batch_start += batch_size
         plt.plot(neg_nums, neg_entropies, 'b-', pos_nums, pos_entropies, 'r-')
         plt.legend(handles=[Patch(color='red', label='Melanoma'), Patch(color='blue', label='Not melanoma')])
         plt.show()
 
-    def predict(self, X):
+        plt.plot(batch_entropies)
+        plt.xlabel("Batch number (size %d)" % batch_size)
+        plt.ylabel("Avg. cross-entropy")
+        plt.show()
+
+    def predict(self, imgs):
         yhat = []
 
-        for i in range(len(X)):
-            print("Making prediction for sample %d" % i)
-            xrow = X[i]
-            prediction = self._process(xrow, remember_inputs=False)
+        sample_num = 0
+        for img in imgs:
+            print("Making prediction for sample %d" % sample_num)
+            prediction = self._process(img, remember_inputs=False)
             yhat.append(prediction.flatten())
+            sample_num += 1
 
-        yhat = numpy.asarray(yhat)
-        assert len(yhat) == len(X)
-        return yhat
+        return numpy.asarray(yhat)
 
     def _process(self, inputs, remember_inputs=True):
         for layer in self.layers:
