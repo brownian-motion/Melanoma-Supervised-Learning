@@ -9,8 +9,19 @@ def main():
     samples = load_training_samples()
     sample_ys = numpy.array(get_sample_observations(samples))
     net = make_neural_net()
-    net.fit(get_training_sample_images_gen(samples), sample_ys)
-    yhats = net.predict(get_training_sample_images_gen(samples))
+    net.fit(get_sample_images_gen(samples), sample_ys, batch_size=5)
+
+    net._process(next(get_sample_images_gen(samples)), remember_inputs=True)  # to populate layer._last_outputs
+    for i in range(len(net.layers)):
+        layer = net.layers[i]
+        if type(layer) is ConvolutionalLayer:
+            filter_outs = layer._last_outputs[-1]
+            filter_img = filter_outs[0]
+            plt.imshow((filter_img + 1) * 128, cmap='gray')
+            plt.title("Last output from trained conv layer %d, filter %d" % (i, 0))
+            plt.show()
+
+    yhats = net.predict(get_sample_images_gen(samples))
     for i in range(len(yhats)):
         plt.plot([i, i], [sample_ys[i], yhats[i]], 'r-' if sample_ys[i] == 1 else 'b-')
     plt.title("Predictions vs. observations")
@@ -39,7 +50,7 @@ def load_images_iter(samples):
         yield move_color_channel_to_first_axis(s.get_image() / 128 - 1)
 
 
-def get_training_sample_images_gen(samples):
+def get_sample_images_gen(samples):
     """
     Returns a generator (for for loops) of images for each sample, appropriate for this experiment's neural net
     :return: an iterable of images from each sample, appropriate for this experiment's neural net
@@ -48,13 +59,14 @@ def get_training_sample_images_gen(samples):
     # for sample in samples:
     #     print("(%4d, %4d) - %s" % (sample.image_dim[0], sample.image_dim[1], sample.diagnosis))
     # this normalizes each color from 0~256 to -1~1, and makes the color channel the primary axis.
-    return (move_color_channel_to_first_axis(s.get_image() / 128 - 1) for s in samples)
+    return (s.get_grayscale_image() / 128 - 1 for s in samples)
+    # return (move_color_channel_to_first_axis(s.get_image() / 128 - 1) for s in samples)
 
 
 def load_training_samples():
     samples = Sample.get_samples("../../ISIC-images/UDA-1")
     random.shuffle(samples)
-    return samples[:10]
+    return samples
 
 
 def get_sample_observations(samples):
@@ -65,27 +77,27 @@ def get_sample_observations(samples):
 def make_neural_net():
     net = SimpleNeuralBinaryClassifier()
     dim = STANDARD_IMAGE_LENGTH
-    num_layers = 3
-    net.add_layer(ConvolutionalLayer((5, 5), num_filters=6, training_rate=0.01))
+    num_layers = 1
+    net.add_layer(ConvolutionalLayer((5, 5), num_filters=5, training_rate=0.1))
     dim = dim - 5 + 1
-    num_layers *= 6
+    num_layers *= 5
     net.add_layer(MeanpoolLayer((4, 4), overlap_tiles=False))
-    dim = dim // 4
-    net.add_layer(ConvolutionalLayer((3, 3), num_filters=4, training_rate=0.01))
+    dim //= 4
+    net.add_layer(ConvolutionalLayer((3, 3), num_filters=3, training_rate=0.1))
     dim = dim - 3 + 1
-    num_layers *= 4
+    num_layers *= 3
     net.add_layer(MeanpoolLayer((3, 3), overlap_tiles=False))
-    dim = dim // 3
-    net.add_layer(ConvolutionalLayer((4, 4), num_filters=4, training_rate=0.01))
+    dim //= 3
+    net.add_layer(ConvolutionalLayer((4, 4), num_filters=4, training_rate=0.1))
     dim = dim - 4 + 1
     num_layers *= 4
     net.add_layer(MeanpoolLayer((4, 4), overlap_tiles=False))
-    dim = dim // 4
-    net.add_layer(ConvolutionalLayer((4, 4), num_filters=4, training_rate=0.01))
+    dim //= 4
+    net.add_layer(ConvolutionalLayer((4, 4), num_filters=4, training_rate=0.1))
     dim = dim - 4 + 1
     num_layers *= 4
     net.add_layer(MeanpoolLayer((4, 4), overlap_tiles=False))
-    dim = dim // 4
+    dim //= 4
     num_pixels = num_layers * dim * dim
     net.add_layer(FullyConnectedLayer(num_pixels, 12, training_rate=0.1, activation_function_name='relu'))
     net.add_layer(FullyConnectedLayer(12, 12, training_rate=0.1, activation_function_name='relu'))

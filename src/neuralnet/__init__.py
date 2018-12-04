@@ -250,13 +250,13 @@ class FullyConnectedLayer:
 
         gradient = numpy.matmul(error, to_row_vector(last_in))
         print("        Finished backpropagation for %5d x %2d dense layer "
-              "w/ wt. updates %.1E to %.1E (avg. wt. %.1E), "
-              "bias updates %.1E to %.1E (avg. bias %.1E)" % (
+              "w/ wt. updates % .1E to % .1E (wt. % .1E to % .1E), "
+              "bias updates % .1E to % .1E (bias % .1E to % .1E)" % (
                   self.num_ins, self.num_outs,
                   self.training_rate * numpy.min(gradient), self.training_rate * numpy.max(gradient),
-                  numpy.average(self.weights),
+                  numpy.min(self.weights), numpy.max(self.weights),
                   self.training_rate * numpy.min(error), self.training_rate * numpy.max(error),
-                  numpy.average(self.bias)))
+                  numpy.min(self.bias), numpy.max(self.bias)))
         assert gradient.shape == self.weights.shape
         self.weights -= self.training_rate * gradient
         assert error.shape == self.bias.shape
@@ -369,13 +369,13 @@ class ConvolutionalLayer:
 
             self.filters[filter_num] -= self.training_rate * numpy.flip(weight_gradient)
             print("            Finished backpropagation for %dx%d Conv. layer, filter %d, "
-                  "with gradient updates from %.1E to %.1E (avg. of filter is %.1E)" % (
+                  "with gradient updates from % .1E to % .1E (filter is % .0E to % .0E)" % (
                       filter.shape[0], filter.shape[1], filter_num,
                       self.training_rate * numpy.min(weight_gradient), self.training_rate * numpy.max(weight_gradient),
-                      numpy.average(self.filters[filter_num])),
+                      numpy.min(filter), numpy.max(filter)),
                   flush=True)
 
-        print("        Finish backprop for Conv. layer with passthrough error from %.1E to %.1E" % (
+        print("        Finish backprop for Conv. layer with passthrough error from % .1E to % .1E" % (
             numpy.min(last_error), numpy.max(last_error)),
               flush=True)
         return last_error
@@ -438,7 +438,7 @@ class SimpleNeuralBinaryClassifier:
                 y = obs[sample_num]
                 yhat = self._process(bat[i], remember_inputs=True)
                 entropy = binary_cross_entropy(yhat, y)
-                total_batch_entropy += total_batch_entropy
+                total_batch_entropy += entropy
                 if y == 1:
                     pos_nums.append(1)
                     pos_entropies.append(entropy)
@@ -466,7 +466,7 @@ class SimpleNeuralBinaryClassifier:
             batch_start += batch_size
 
         dur = timeit.default_timer() - start_time
-        print("Avg. time to fit layer is %.0f units " % (dur / obs.size))
+        print("Avg. time to fit sample is %.0f seconds " % (dur / obs.size))
 
         plt.plot(neg_nums, neg_entropies, 'b-', pos_nums, pos_entropies, 'r-')
         plt.legend(handles=[Patch(color='red', label='Melanoma'), Patch(color='blue', label='Not melanoma')])
@@ -481,9 +481,9 @@ class SimpleNeuralBinaryClassifier:
         yhat = []
 
         sample_num = 0
-        print("Making prediction for sample %d" % sample_num)
         start = timeit.default_timer()
         for img in imgs:
+            print("Making prediction for sample %d" % sample_num)
             prediction = self._process(img, remember_inputs=False)
             yhat.append(prediction.flatten())
             sample_num += 1
