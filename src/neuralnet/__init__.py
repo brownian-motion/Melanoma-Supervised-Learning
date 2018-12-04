@@ -1,5 +1,3 @@
-import timeit
-
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from scipy.signal import convolve  # to perform convolution
@@ -338,39 +336,31 @@ class ConvolutionalLayer:
         error = error.reshape(last_output.shape)  # returns a new view, not the underlying object
         last_error = numpy.zeros(last_input.shape)  # will always be 3-D
         # weight_gradient = numpy.zeros(self.filter_weights.shape)
-        (tile_height, tile_width) = self.filter_shape  # should always be 2-D
         num_input_layers = error.shape[0] // len(self.filters)
         assert num_input_layers * len(self.filters) == error.shape[0]
 
         # look at each output layer as a convolution of one filter and one input layer,
         # and find the total gradient for that filter for each layer
         for filter_num in range(len(self.filters)):
-            weight_gradient = numpy.zeros_like(self.filters[filter_num])
+            filter = self.filters[filter_num]
+            weight_gradient = numpy.zeros_like(filter)
             # total up the gradient for this filter for each input layer
             for input_layer_num in range(num_input_layers):  # for loops should match the relative order in process()
                 error_layer_num = filter_num * num_input_layers + input_layer_num
                 error_layer = error[error_layer_num]
 
-                error_calc_start_time = timeit.default_timer()
-                # TODO: optimize this for loop. It's 10~30x slower than the gradient calculation
-                for (h, w) in numpy.ndindex(*error_layer.shape):
-                    last_error[input_layer_num, h:h + tile_width, w:w + tile_width] += \
-                        self.filters[filter_num] * error_layer[h, w]
-                error_calc_duration = timeit.default_timer() - error_calc_start_time
+                last_error_layer = convolve(error_layer, filter)
+                last_error[input_layer_num] += last_error_layer
 
-                gradient_calc_start_time = timeit.default_timer()
                 weight_gradient += convolve(last_input[input_layer_num], numpy.flip(error[filter_num]),
                                             mode='valid', method='direct')
                 # we don't update the filter until we've totalled results for each layer,
                 # or else the changes would affect each gradient
-                gradient_calc_duration = timeit.default_timer() - gradient_calc_start_time
 
-                print("                On input layer %d, error calc took %.1f longer than gradient calc" %
-                      (num_input_layers, error_calc_duration / gradient_calc_duration))
             self.filters[filter_num] -= self.training_rate * numpy.flip(weight_gradient)
             print("            Finished backpropagation for %dx%d Conv. layer, filter %d, "
                   "with gradient updates from %.1E to %.1E (avg. of filter is %.1E)" % (
-                      self.filter_shape[0], self.filter_shape[1], filter_num,
+                      filter.shape[0], filter.shape[1], filter_num,
                       self.training_rate * numpy.min(weight_gradient), self.training_rate * numpy.max(weight_gradient),
                       numpy.average(self.filters[filter_num])),
                   flush=True)
