@@ -3,6 +3,7 @@
 
 import csv
 import random
+import math
 
 # load a csv file
 def loadData(file):
@@ -12,6 +13,13 @@ def loadData(file):
         for row in reader:
             data.append(row)
     return data
+
+def loadCsv(filename):
+	lines = csv.reader(open(filename, "r"))
+	dataset = list(lines)
+	for i in range(len(dataset)):
+		dataset[i] = [float(x) for x in dataset[i]]
+	return dataset
 
 # splits data into training and testing sets
 def splitData(dataset, ratio):
@@ -34,6 +42,19 @@ def classifier(data):
         separated[sample[-1]].append(sample)
     return separated
 
+def mean(numbers):
+	return sum(numbers)/float(len(numbers))
+ 
+def stdev(numbers):
+	avg = mean(numbers)
+	variance = sum([pow(x-avg,2) for x in numbers])/float(len(numbers)-1)
+	return math.sqrt(variance)
+
+def variance(numbers):
+    avg = mean(numbers)
+    variance = sum([pow(x-avg,2) for x in numbers])/float(len(numbers)-1)
+    return variance
+
 # returns a vector of the mean and stdev
 def summarize(data):
     summaries = [(mean(attr), stdev(attr)) for attr in zip(*data)]
@@ -43,28 +64,32 @@ def summarize(data):
 def summarizeByClass(data):
     separated = classifier(data)
     summaries = {}
-    for classVal, instances in separated.iteritems():
+    for classVal, instances in separated.items():
         summaries[classVal] = summarize(instances)
     return summaries
 
-def probability(x, mean, stdev):
+def probabilityDensity(x, mean, stdev):
     exponent = math.exp(-(math.pow(x-mean,2) / (2*math.pow(stdev,2))))
     return exponent * (1 / (math.sqrt(2*math.pi) * stdev))
 
+def gaussianProbability(x, mean, variance):
+    exponent = math.exp(-(math.pow(x-mean,2) / (2*variance)))
+    return exponent * (1 / (math.sqrt(2*math.pi * variance)))
+
 def calculateClassProbabilities(summaries, inputVector):
 	probabilities = {}
-	for classValue, classSummaries in summaries.iteritems():
+	for classValue, classSummaries in summaries.items():
 		probabilities[classValue] = 1
 		for i in range(len(classSummaries)):
 			mean, stdev = classSummaries[i]
 			x = inputVector[i]
-			probabilities[classValue] *= calculateProbability(x, mean, stdev)
+			probabilities[classValue] *= gaussianProbability(x, mean, math.pow(stdev, 2))
 	return probabilities
 
 def predict(summaries, inputVector):
 	probabilities = calculateClassProbabilities(summaries, inputVector)
 	bestLabel, bestProb = None, -1
-	for classValue, probability in probabilities.iteritems():
+	for classValue, probability in probabilities.items():
 		if bestLabel is None or probability > bestProb:
 			bestProb = probability
 			bestLabel = classValue
