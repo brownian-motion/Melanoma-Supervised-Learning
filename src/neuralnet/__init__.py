@@ -459,7 +459,7 @@ class SimpleNeuralBinaryClassifier:
             yhat.append(prediction.flatten())
 
         yhat = numpy.asarray(yhat)
-        assert yhat.shape == (len(X), 2)
+        assert len(yhat) == len(X)
         return yhat
 
     def _process(self, inputs, remember_inputs=True):

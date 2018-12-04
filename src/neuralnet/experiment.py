@@ -1,16 +1,47 @@
 import random
 
+from matplotlib.patches import Patch
+from sklearn.metrics import roc_curve
+
+from graphs.performance_diagram_stuff import plot_performance_diagram
+from graphs.reliability_curve_stuff import plot_reliability_curve
 from images import *
 from neuralnet import *
 
 
 def main():
     sample_images_iter, sample_ys = load_training_samples()
+    sample_ys = numpy.array(sample_ys)
     net = make_neural_net()
     net.fit(sample_images_iter, sample_ys)
     yhats = net.predict(sample_images_iter)
     for i in range(len(yhats)):
         plt.plot([i, i], [sample_ys[i], yhats[i]], 'r-' if sample_ys[i] == 1 else 'b-')
+    plt.title("Predictions vs. observations")
+    plt.xlabel("Sample number")
+    plt.ylabel("Confidence sample is melanoma")
+    plt.show()
+
+    print("Observations:")
+    print(sample_ys)
+    print("Predictions:")
+    print(yhats)
+
+    plot_performance_diagram(sample_ys, yhats)
+    plt.title("Performance diagram")
+    plt.show()
+
+    plot_reliability_curve(sample_ys, yhats)
+    plt.title("Reliability diagram")
+    plt.show()
+
+    fpr, tpr, _ = roc_curve(sample_ys, yhats)
+    plt.plot([0, 1], [0, 1], '--')
+    plt.plot(fpr, tpr, 'r-')
+    plt.xlabel("Probability of false detection")
+    plt.ylabel("Probability of detection")
+    plt.title("ROC curve for CNN")
+    plt.legend(handles=[Patch(color='red', label='CNN'), Patch(color='gray', label="Random predictor")])
     plt.show()
 
 
