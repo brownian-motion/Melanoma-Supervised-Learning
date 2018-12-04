@@ -1,3 +1,5 @@
+import timeit
+
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from scipy.signal import convolve  # to perform convolution
@@ -346,16 +348,25 @@ class ConvolutionalLayer:
             weight_gradient = numpy.zeros_like(self.filters[filter_num])
             # total up the gradient for this filter for each input layer
             for input_layer_num in range(num_input_layers):  # for loops should match the relative order in process()
-                for h in range(error.shape[1]):
-                    for w in range(error.shape[2]):
-                        last_error[input_layer_num, h:h + tile_width, w:w + tile_width] += \
-                            self.filters[filter_num] * error[filter_num * num_input_layers + input_layer_num, h, w]
+                error_layer_num = filter_num * num_input_layers + input_layer_num
+                error_layer = error[error_layer_num]
 
-                # I don't know what's wrong and this is bad.
-                # I think it's producing backpropagation incorrectly
+                error_calc_start_time = timeit.default_timer()
+                # TODO: optimize this for loop. It's 10~30x slower than the gradient calculation
+                for (h, w) in numpy.ndindex(*error_layer.shape):
+                    last_error[input_layer_num, h:h + tile_width, w:w + tile_width] += \
+                        self.filters[filter_num] * error_layer[h, w]
+                error_calc_duration = timeit.default_timer() - error_calc_start_time
+
+                gradient_calc_start_time = timeit.default_timer()
                 weight_gradient += convolve(last_input[input_layer_num], numpy.flip(error[filter_num]),
                                             mode='valid', method='direct')
-                # we don't update the filter until we've totaled for each layer, or else the changes would affect each gradient
+                # we don't update the filter until we've totalled results for each layer,
+                # or else the changes would affect each gradient
+                gradient_calc_duration = timeit.default_timer() - gradient_calc_start_time
+
+                print("                On input layer %d, error calc took %.1f longer than gradient calc" %
+                      (num_input_layers, error_calc_duration / gradient_calc_duration))
             self.filters[filter_num] -= self.training_rate * numpy.flip(weight_gradient)
             print("            Finished backpropagation for %dx%d Conv. layer, filter %d, "
                   "with gradient updates from %.1E to %.1E (avg. of filter is %.1E)" % (
