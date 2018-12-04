@@ -1,3 +1,5 @@
+import timeit
+
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from scipy.signal import convolve  # to perform convolution
@@ -420,6 +422,8 @@ class SimpleNeuralBinaryClassifier:
         neg_nums = []
         neg_entropies = []
 
+        start_time = timeit.default_timer()
+
         batch_start = 0
         batch_entropies = []
         for bat in batch(imgs, n=batch_size):
@@ -456,6 +460,10 @@ class SimpleNeuralBinaryClassifier:
                 self._backpropagate(true_outputs)
             print()
             batch_start += batch_size
+
+        dur = timeit.default_timer() - start_time
+        print("Avg. time to fit layer is %.0f units " % (dur / obs.size))
+
         plt.plot(neg_nums, neg_entropies, 'b-', pos_nums, pos_entropies, 'r-')
         plt.legend(handles=[Patch(color='red', label='Melanoma'), Patch(color='blue', label='Not melanoma')])
         plt.show()
@@ -469,11 +477,14 @@ class SimpleNeuralBinaryClassifier:
         yhat = []
 
         sample_num = 0
+        print("Making prediction for sample %d" % sample_num)
+        start = timeit.default_timer()
         for img in imgs:
-            print("Making prediction for sample %d" % sample_num)
             prediction = self._process(img, remember_inputs=False)
             yhat.append(prediction.flatten())
             sample_num += 1
+        dur = timeit.default_timer() - start
+        print("Avg. layer took %.0f units of time to predict" % (dur / sample_num))
 
         return numpy.asarray(yhat)
 
