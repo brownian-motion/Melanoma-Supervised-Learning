@@ -25,7 +25,7 @@ class SoftmaxUnittest(unittest.TestCase):
     def test_softmax_unequal_inputs(self):
         inputs = [3, 4, 1]
         layer = SoftmaxLayer()
-        outputs = layer.process(inputs)
+        outputs = layer.process(inputs).flatten()
         self.assertEqual(len(inputs), len(outputs), msg="Softmax should return array of same size as inputs")
         expected_outputs_total = math.exp(3) + math.exp(4) + math.e
         expected_outputs = [math.exp(3) / expected_outputs_total, math.exp(4) / expected_outputs_total,
@@ -135,6 +135,18 @@ class FullyConnectedLayerTest(unittest.TestCase):
         self.assertGreater(result2[1, 0], result[1, 0],
                            msg="Prediction for bottom of column should have grown smaller, because error indicated it was too small (1 less than true_")
 
+    def test_4x1_sigmoid_learns_from_backpropagation(self):
+        layer = FullyConnectedLayer(4, 1, 0.001, 'sigmoid')
+        layer.weights = numpy.array([[.25, .5, .75, -1]])  # field is impl-specific
+        layer.bias = to_column_vector([3.0])
+        sample_input = [-.5, -1.1, 1.2, 1.3]
+        result = layer.process(sample_input, remember_inputs=True)
+        for _ in range(4):
+            layer.backpropagate(to_column_vector([1]))
+            result2 = layer.process(sample_input, remember_inputs=True)
+        self.assertLess(result2[0, 0], result[0, 0],
+                        msg="Prediction for top of column should have grown smaller, because error indicated it was too large (1 more than true)")
+
 
 class MeanpoolLayerTest(unittest.TestCase):
     def test_computes_means_correctly_with_2x3_tile(self):
@@ -155,7 +167,7 @@ class MeanpoolLayerTest(unittest.TestCase):
         error = numpy.asarray([[1, 2], [-2, -1]])
         expected_error = numpy.asarray(
             [[1, 1, 1, 2, 2, 2], [1, 1, 1, 2, 2, 2],
-             [-2, -2, -2, -1, -1, -1], [-2, -2, -2, -1, -1, -1]]) / (2 * 3)
+             [-2, -2, -2, -1, -1, -1], [-2, -2, -2, -1, -1, -1]]) / 6
         results = layer.backpropagate(error)
         self.assertEqual(results.shape, expected_error.shape,
                          "Calculated error and expected error should be the same shape")
@@ -166,7 +178,6 @@ class MeanpoolLayerTest(unittest.TestCase):
 
 
 class ConvolutionalLayerTest(unittest.TestCase):
-
     def test_convolutionallayer_with_2d_input_gives_3d_output(self):
         layer = ConvolutionalLayer((2, 2), num_filters=1)
         inputs = numpy.random.rand(4, 5)
