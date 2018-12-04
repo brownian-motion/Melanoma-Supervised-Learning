@@ -1,25 +1,27 @@
-import unittest
-
 from decisiontree.DecisionTree import *
 
-class Test(unittest.TestCase):
-    def test_grow_tree_doesnt_crash(self):
-        inputs = np.array([[1,2,3,4,5,0],[6,7,8,9,10,1]])
-        tree = growTree(inputs)
+
+import featureextraction as FE
+from images import *
+
+fe = FE.make_extractor()
+#import samples, directory can change as needed
+training_samples = Sample.get_samples("C:/Users/osage/Desktop/SL Short Project/ISIC-images/UDA-1")
+#for i in range(0,training_samples):
+    #extact im array for all images to train the tree
+    #training_im_array = [fe.get_image_arr(training_samples.get_grayscale_image()) for sample in training_samples]
+    #training_feature_list.append([fe.get_features(training_im_array) for sample in training_samples]
 
 
+#tree_depth_5 = growTree(training_features)
+#tree_depth_5.predict(training_features)
 
-        print("Test: Grow Tree doesn't crash")
+#tree_depth_10 = growTree(training_features,10)
+#tree_depth_10.predict(training_features)
 
-    def test_predict(self):
-        inputs = np.array([[1,2,3,4,5,0],[6,7,8,9,10,1]])
-        tree = growTree(inputs)
+#tree_depth_20 = growTree(training_features,20)
+#tree_depth_20.predict(training_features)
 
-        results = tree.predict(inputs)
-
-        print("Test: Predict doesn't crash")
-        self.assertEqual(0,results[0])
-        self.assertEqual(1,results[1])
-
-
+#tree_depth_50 = growTree(training_features,50)
+#tree_depth_50.predict(training_features)
 
