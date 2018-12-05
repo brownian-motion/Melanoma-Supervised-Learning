@@ -200,11 +200,9 @@ class ConvolutionalLayerTest(unittest.TestCase):
                                         [[1 * -4 + 1 * -3 + 2 * -2 + 2 * -5, 1 * -4 + 5 * -3 + 2 * -2 + 2 * -5],
                                          [2 * -4 + 2 * -3 + 1 * -2 + 1 * -5, 2 * -4 + 2 * -3 + 1 * -2 + 1 * -5]]])
         self.assertEqual(results.shape, expected_results.shape, "Results and expected results should be the same shape")
-        for i in range(results.shape[0]):
-            for j in range(results.shape[1]):
-                for k in range(results.shape[2]):
-                    self.assertEqual(results[i, j, k], expected_results[i, j, k],
-                                     "Results and expected results differ at spot (%d, %d, %d)" % (i, j, k))
+        for (i, j, k) in numpy.ndindex(*results.shape):
+            self.assertEqual(results[i, j, k], expected_results[i, j, k],
+                             "Results and expected results differ at spot (%d, %d, %d)" % (i, j, k))
 
     def test_convolutional_layer_learns(self):
         layer = ConvolutionalLayer((2, 2), num_filters=1)
@@ -217,6 +215,23 @@ class ConvolutionalLayerTest(unittest.TestCase):
                         msg="Prediction for top left should have grown smaller, because error indicated it was too large (1 more than true value)")
         self.assertGreater(results2[0, 1, 1], results[0, 1, 1],
                            msg="Prediction for bottom right should have grown greater, because error indicated it was too small (1 less than true value)")
+
+    def test_conv_layer_backpropagates_correctly(self):
+        layer = ConvolutionalLayer(filter_shape=(2, 2), num_filters=1)
+        sample_input = numpy.random.rand(1, 13, 17)
+        output = layer.process(sample_input, remember_inputs=True)
+        random_error = numpy.random.rand(*output.shape)
+        expected_backprop_error = numpy.asarray([convolve(random_error[0], layer.filters[0])])
+        actual_backprop_error = layer.backpropagate(random_error)
+
+        self.assertSequenceEqual(sample_input.shape, expected_backprop_error.shape,
+                                 msg="Backprop error should have the same shape as the input")
+        self.assertSequenceEqual(expected_backprop_error.shape, actual_backprop_error.shape,
+                                 msg="Backprop error should have same shape as what's expected")
+        for (l, r, c) in numpy.ndindex(*sample_input.shape):
+            self.assertAlmostEqual(expected_backprop_error[l, r, c], actual_backprop_error[l, r, c],
+                                   msg="Expected and actual backpropped error differ at layer %d, row %d, col %d" % (
+                                       l, r, c), places=5)
 
 
 class LinearNeuralNetworkTest(unittest.TestCase):
@@ -245,6 +260,42 @@ class LinearNeuralNetworkTest(unittest.TestCase):
         results2 = net.predict([sample_inputs])
         self.assertGreater(results2, results,
                            msg="Output should have grown larger, because error indicated that it was too small (less than true value)")
+
+    def test_conv_neural_net_sigmoid_cap_learns_growing_output(self):
+        net = SimpleNeuralBinaryClassifier()
+        net.add_layer(ConvolutionalLayer((2, 2)))
+        net.add_layer(MeanpoolLayer((2, 2), overlap_tiles=False))
+        net.add_layer(FullyConnectedLayer(4, 1, activation_function_name='identity'))
+        net.add_layer(SigmoidLayer())
+
+        # ignore the results, just run the _process to see what comes out
+        sample_inputs = numpy.random.rand(5, 5)
+        results = net.predict([sample_inputs])
+        for _ in range(5):
+            self.assertEqual(1, results.size, msg="Number of outputs doesn't match what's expected")
+            self.assertTrue(is_column_vector(results))
+            net.fit([sample_inputs], [1])
+            results2 = net.predict([sample_inputs])
+        self.assertGreater(results2, results,
+                           msg="Output should have grown larger, because error indicated that it was too small (less than true value)")
+
+    def test_conv_neural_net_sigmoid_cap_learns_shrinking_output(self):
+        net = SimpleNeuralBinaryClassifier()
+        net.add_layer(ConvolutionalLayer((2, 2)))
+        net.add_layer(MeanpoolLayer((2, 2), overlap_tiles=False))
+        net.add_layer(FullyConnectedLayer(4, 1, activation_function_name='identity'))
+        net.add_layer(SigmoidLayer())
+
+        # ignore the results, just run the _process to see what comes out
+        sample_inputs = numpy.random.rand(5, 5)
+        results = net.predict([sample_inputs])
+        for _ in range(5):
+            self.assertEqual(1, results.size, msg="Number of outputs doesn't match what's expected")
+            self.assertTrue(is_column_vector(results))
+            net.fit([sample_inputs], [0])
+            results2 = net.predict([sample_inputs])
+        self.assertLess(results2, results,
+                        msg="Output should have grown smaller, because error indicated that it was too large (more than true value)")
 
 
 class SigmoidUnitTest(unittest.TestCase):
