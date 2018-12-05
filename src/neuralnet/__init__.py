@@ -1,8 +1,14 @@
+import timeit
+
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
-from scipy.signal import convolve
+from scipy.signal import convolve  # to perform convolution
+# to perform pooling,
+# see https://stackoverflow.com/questions/42463172/how-to-perform-max-mean-pooling-on-a-2d-array-using-numpy
+from skimage.measure import block_reduce
 
 from cross_entropy import binary_cross_entropy
+from images import batch
 from neuralnet.activation import *
 from neuralnet.vector_utils import *
 
@@ -86,6 +92,9 @@ class AbstractConvolutionalLayer:
     '''
 
     def __init__(self, tile_shape, overlap_tiles=False):
+        if overlap_tiles:
+            raise ValueError("This layer no longer supports overlapping tiles, "
+                             "due to restrictions in scipy implementation of striding.")
         if len(tile_shape) != 2:
             raise ValueError(
                 "This pooling layer implementation only knows how to handle 2-D tiles, inputs, and outputs")
@@ -118,13 +127,8 @@ class AbstractConvolutionalLayer:
 
     def convolve2d(self, input_mat, convolution_func):
         assert len(input_mat.shape) == 2
-        output_shape = self._compute_output_shape(input_mat.shape, self.tile_shape)
-        output = numpy.zeros(output_shape)
-        for i in range(output_shape[0]):
-            for j in range(output_shape[1]):
-                tile = self._get_tile((i, j), input_mat, self.tile_shape)
-                output[i, j] = convolution_func(tile)
-        return output
+        assert not self._overlap_tiles
+        return block_reduce(input_mat, block_size=self.tile_shape, func=convolution_func)
 
     def _compute_output_shape(self, input_shape, tile_shape):
         if self._overlap_tiles:
@@ -246,13 +250,13 @@ class FullyConnectedLayer:
 
         gradient = numpy.matmul(error, to_row_vector(last_in))
         print("        Finished backpropagation for %5d x %2d dense layer "
-              "w/ wt. updates %.1E to %.1E (avg. wt. %.1E), "
-              "bias updates %.1E to %.1E (avg. bias %.1E)" % (
+              "w/ wt. updates % .1E to % .1E (wt. % .1E to % .1E), "
+              "bias updates % .1E to % .1E (bias % .1E to % .1E)" % (
                   self.num_ins, self.num_outs,
                   self.training_rate * numpy.min(gradient), self.training_rate * numpy.max(gradient),
-                  numpy.average(self.weights),
+                  numpy.min(self.weights), numpy.max(self.weights),
                   self.training_rate * numpy.min(error), self.training_rate * numpy.max(error),
-                  numpy.average(self.bias)))
+                  numpy.min(self.bias), numpy.max(self.bias)))
         assert gradient.shape == self.weights.shape
         self.weights -= self.training_rate * gradient
         assert error.shape == self.bias.shape
@@ -266,6 +270,10 @@ class FullyConnectedLayer:
             return vec_relu, vec_relu_deriv
         if activation_function_name == 'sigmoid':
             return vec_sigmoid, vec_sigmoid_deriv
+        if activation_function_name == 'sigmoid2':
+            return vec_sigmoid_2, vec_sigmoid_2_deriv
+        if activation_function_name is None or activation_function_name == 'identity' or activation_function_name == 'none':
+            return vec_identity, vec_identity_deriv
         raise ValueError("Unrecognized activation function \"%s\"" % activation_function_name)
 
 
@@ -338,35 +346,36 @@ class ConvolutionalLayer:
         error = error.reshape(last_output.shape)  # returns a new view, not the underlying object
         last_error = numpy.zeros(last_input.shape)  # will always be 3-D
         # weight_gradient = numpy.zeros(self.filter_weights.shape)
-        (tile_height, tile_width) = self.filter_shape  # should always be 2-D
         num_input_layers = error.shape[0] // len(self.filters)
         assert num_input_layers * len(self.filters) == error.shape[0]
 
         # look at each output layer as a convolution of one filter and one input layer,
         # and find the total gradient for that filter for each layer
         for filter_num in range(len(self.filters)):
-            weight_gradient = numpy.zeros_like(self.filters[filter_num])
+            filter = self.filters[filter_num]
+            weight_gradient = numpy.zeros_like(filter)
             # total up the gradient for this filter for each input layer
             for input_layer_num in range(num_input_layers):  # for loops should match the relative order in process()
-                for h in range(error.shape[1]):
-                    for w in range(error.shape[2]):
-                        last_error[input_layer_num, h:h + tile_width, w:w + tile_width] += \
-                            self.filters[filter_num] * error[filter_num * num_input_layers + input_layer_num, h, w]
+                error_layer_num = filter_num * num_input_layers + input_layer_num
+                error_layer = error[error_layer_num]
 
-                # I don't know what's wrong and this is bad.
-                # I think it's producing backpropagation incorrectly
+                last_error_layer = convolve(error_layer, filter)
+                last_error[input_layer_num] += last_error_layer
+
                 weight_gradient += convolve(last_input[input_layer_num], numpy.flip(error[filter_num]),
                                             mode='valid', method='direct')
-                # we don't update the filter until we've totaled for each layer, or else the changes would affect each gradient
+                # we don't update the filter until we've totalled results for each layer,
+                # or else the changes would affect each gradient
+
             self.filters[filter_num] -= self.training_rate * numpy.flip(weight_gradient)
             print("            Finished backpropagation for %dx%d Conv. layer, filter %d, "
-                  "with gradient updates from %.1E to %.1E (avg. of filter is %.1E)" % (
-                      self.filter_shape[0], self.filter_shape[1], filter_num,
+                  "with gradient updates from % .1E to % .1E (filter is % .0E to % .0E)" % (
+                      filter.shape[0], filter.shape[1], filter_num,
                       self.training_rate * numpy.min(weight_gradient), self.training_rate * numpy.max(weight_gradient),
-                      numpy.average(self.filters[filter_num])),
+                      numpy.min(filter), numpy.max(filter)),
                   flush=True)
 
-        print("        Finish backprop for Conv. layer with passthrough error from %.1E to %.1E" % (
+        print("        Finish backprop for Conv. layer with passthrough error from % .1E to % .1E" % (
             numpy.min(last_error), numpy.max(last_error)),
               flush=True)
         return last_error
@@ -402,70 +411,90 @@ class SimpleNeuralBinaryClassifier:
     def __init__(self):
         self.layers = []
 
-    def fit(self, X, y, batch_size=None):
-        if type(y) is not numpy.ndarray:
-            y = numpy.asarray(y)
+    def fit(self, imgs, obs, batch_size=None):
+        if type(obs) is not numpy.ndarray:
+            obs = numpy.asarray(obs)
         if batch_size is None or batch_size <= 0:
-            if y.size > 10:
-                batch_size = min(y.size // 5, 10)
+            if obs.size > 10:
+                batch_size = min(obs.size // 5, 10)
             else:
-                batch_size = y.size
+                batch_size = obs.size
             print("Training with batch size %d" % batch_size)
-        if len(X) != y.size:
-            raise ValueError("Number of samples in X must equal the number of observations in y")
 
         pos_nums = []
         pos_entropies = []
         neg_nums = []
         neg_entropies = []
 
-        for batch_start in range(0, y.size, batch_size):
+        start_time = timeit.default_timer()
+
+        batch_start = 0
+        batch_entropies = []
+        for bat in batch(imgs, n=batch_size):
             print("Predicting batch starting at sample %d" % batch_start)
-            for sample_num in range(batch_start, min(y.size, batch_start + batch_size)):
-                yhat = self._process(X[sample_num], remember_inputs=True)
-                entropy = binary_cross_entropy(yhat, y[sample_num])
-                if y[sample_num] == 1:
-                    pos_nums.append(sample_num)
+            total_batch_entropy = 0.0
+            for i in range(len(bat)):
+                sample_num = batch_start + i
+                y = obs[sample_num]
+                yhat = self._process(bat[i], remember_inputs=True)
+                entropy = binary_cross_entropy(yhat, y)
+                total_batch_entropy += entropy
+                if y == 1:
+                    pos_nums.append(1)
                     pos_entropies.append(entropy)
                 else:
-                    neg_nums.append(sample_num)
+                    neg_nums.append(0)
                     neg_entropies.append(entropy)
                 print("   Finished sample %3d (%8s): %.1f%% prediction melanoma (error = %.4f)" % (
-                    sample_num, "melanoma" if y[sample_num] else "benign", yhat * 100, entropy), flush=True)
+                    sample_num, "melanoma" if y else "benign", yhat * 100, entropy), flush=True)
+            batch_entropies.append(total_batch_entropy / len(bat))
             print("Learning from results of prediction...", flush=True)
-            for sample_num in reversed(range(batch_start, min(y.size, batch_start + batch_size))):
-                print("    %d" % sample_num, flush=True)
-                if y[sample_num] == 1:
+            for i in reversed(range(len(bat))):
+                sample_num = batch_start + i
+                print("    Learning from sample %d" % sample_num, flush=True)
+                y = obs[sample_num]
+                if y == 1:
                     true_outputs = to_column_vector([1])
-                elif y[sample_num] == 0:
+                elif y == 0:
                     true_outputs = to_column_vector([0])
                 else:
-                    raise ValueError("Unexpected true observation %s for sample %d. "
+                    raise ValueError("Unexpected observation %s for sample %d. "
                                      "This neural net can only perform "
-                                     "binary classification." % (y[sample_num], sample_num))
+                                     "binary classification." % (y, sample_num))
                 self._backpropagate(true_outputs)
             print()
+            batch_start += batch_size
+
+        dur = timeit.default_timer() - start_time
+        print("Avg. time to fit sample is %.0f seconds " % (dur / obs.size))
+
         plt.plot(neg_nums, neg_entropies, 'b-', pos_nums, pos_entropies, 'r-')
         plt.legend(handles=[Patch(color='red', label='Melanoma'), Patch(color='blue', label='Not melanoma')])
         plt.show()
 
-    def predict(self, X):
+        plt.plot(batch_entropies)
+        plt.xlabel("Batch number (size %d)" % batch_size)
+        plt.ylabel("Avg. cross-entropy")
+        plt.show()
+
+    def predict(self, imgs):
         yhat = []
 
-        for i in range(len(X)):
-            print("Making prediction for sample %d" % i)
-            xrow = X[i]
-            prediction = self._process(xrow, remember_inputs=False)
+        sample_num = 0
+        start = timeit.default_timer()
+        for img in imgs:
+            print("Making prediction for sample %d" % sample_num)
+            prediction = self._process(img, remember_inputs=False)
             yhat.append(prediction.flatten())
+            sample_num += 1
+        dur = timeit.default_timer() - start
+        print("Avg. layer took %.0f units of time to predict" % (dur / sample_num))
 
-        yhat = numpy.asarray(yhat)
-        assert len(yhat) == len(X)
-        return yhat
+        return numpy.asarray(yhat)
 
     def _process(self, inputs, remember_inputs=True):
         for layer in self.layers:
             inputs = layer.process(inputs, remember_inputs=remember_inputs)
-            print("        %s has average output %.2f" % (type(layer).__name__, numpy.average(inputs)))
         return inputs
 
     def _backpropagate(self, true_outputs):

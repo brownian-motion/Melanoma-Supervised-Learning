@@ -35,6 +35,14 @@ class SoftmaxUnittest(unittest.TestCase):
             self.assertAlmostEqual(expected_outputs[i], outputs[i], places=5,
                                    msg="Softmax value differs from expected at index %d" % i)
 
+    # def test_2x2_softmax_backpropagates_correct_error(self):
+    #     layer = SoftmaxLayer()
+    #     layer.process([1, 1], remember_inputs=True)
+    #     last_error = layer.backpropagate([1, 0]).flatten()
+    #     self.assertLess(last_error[0], last_error[1],
+    #                     msg="Softmax should indicate that input in first col was too low, "
+    #                         "since observation for it was higher than prediction")
+
 
 class AbstractPoolingLayerTest(unittest.TestCase):
     def test_max_of_nums_no_overlap(self):
@@ -47,16 +55,6 @@ class AbstractPoolingLayerTest(unittest.TestCase):
                         msg="Expected outputs and outputs from maxpool should match (%s) vs (%s)" % (
                             expected_outputs, outputs))
 
-    def test_max_of_nums_with_overlap(self):
-        inputs = numpy.array([[1, 2, 3, 4], [5, 6, 7, 8]])
-        maxpool_layer = AbstractPoolingLayer((2, 2), func=numpy.amax, overlap_tiles=True)
-        outputs = maxpool_layer.process(inputs)
-        expected_outputs = numpy.array([[[6, 7, 8]]])
-
-        self.assertTrue(numpy.array_equal(expected_outputs, outputs),
-                        msg="Expected outputs and outputs from maxpool should match (%s) vs (%s)" % (
-                            expected_outputs, outputs))
-
 
 class NonOverlapMaxpoolLayerTest(unittest.TestCase):
     def test_2x2_tiles_no_overlap(self):
@@ -64,16 +62,6 @@ class NonOverlapMaxpoolLayerTest(unittest.TestCase):
         maxpool_layer = MaxpoolLayer((2, 2), overlap_tiles=False)
         outputs = maxpool_layer.process(inputs)
         expected_outputs = numpy.array([[[6, 8]]])
-
-        self.assertTrue(numpy.array_equal(expected_outputs, outputs),
-                        msg="Expected outputs and outputs from maxpool should match (%s) vs (%s)" % (
-                            expected_outputs, outputs))
-
-    def test_2x2_tiles_with_overlap(self):
-        inputs = numpy.array([[1, 2, 3, 4], [5, 6, 7, 8]])
-        maxpool_layer = MaxpoolLayer((2, 2), overlap_tiles=True)
-        outputs = maxpool_layer.process(inputs)
-        expected_outputs = numpy.array([[[6, 7, 8]]])
 
         self.assertTrue(numpy.array_equal(expected_outputs, outputs),
                         msg="Expected outputs and outputs from maxpool should match (%s) vs (%s)" % (
@@ -212,11 +200,9 @@ class ConvolutionalLayerTest(unittest.TestCase):
                                         [[1 * -4 + 1 * -3 + 2 * -2 + 2 * -5, 1 * -4 + 5 * -3 + 2 * -2 + 2 * -5],
                                          [2 * -4 + 2 * -3 + 1 * -2 + 1 * -5, 2 * -4 + 2 * -3 + 1 * -2 + 1 * -5]]])
         self.assertEqual(results.shape, expected_results.shape, "Results and expected results should be the same shape")
-        for i in range(results.shape[0]):
-            for j in range(results.shape[1]):
-                for k in range(results.shape[2]):
-                    self.assertEqual(results[i, j, k], expected_results[i, j, k],
-                                     "Results and expected results differ at spot (%d, %d, %d)" % (i, j, k))
+        for (i, j, k) in numpy.ndindex(*results.shape):
+            self.assertEqual(results[i, j, k], expected_results[i, j, k],
+                             "Results and expected results differ at spot (%d, %d, %d)" % (i, j, k))
 
     def test_convolutional_layer_learns(self):
         layer = ConvolutionalLayer((2, 2), num_filters=1)
@@ -229,6 +215,23 @@ class ConvolutionalLayerTest(unittest.TestCase):
                         msg="Prediction for top left should have grown smaller, because error indicated it was too large (1 more than true value)")
         self.assertGreater(results2[0, 1, 1], results[0, 1, 1],
                            msg="Prediction for bottom right should have grown greater, because error indicated it was too small (1 less than true value)")
+
+    def test_conv_layer_backpropagates_correctly(self):
+        layer = ConvolutionalLayer(filter_shape=(2, 2), num_filters=1)
+        sample_input = numpy.random.rand(1, 13, 17)
+        output = layer.process(sample_input, remember_inputs=True)
+        random_error = numpy.random.rand(*output.shape)
+        expected_backprop_error = numpy.asarray([convolve(random_error[0], layer.filters[0])])
+        actual_backprop_error = layer.backpropagate(random_error)
+
+        self.assertSequenceEqual(sample_input.shape, expected_backprop_error.shape,
+                                 msg="Backprop error should have the same shape as the input")
+        self.assertSequenceEqual(expected_backprop_error.shape, actual_backprop_error.shape,
+                                 msg="Backprop error should have same shape as what's expected")
+        for (l, r, c) in numpy.ndindex(*sample_input.shape):
+            self.assertAlmostEqual(expected_backprop_error[l, r, c], actual_backprop_error[l, r, c],
+                                   msg="Expected and actual backpropped error differ at layer %d, row %d, col %d" % (
+                                       l, r, c), places=5)
 
 
 class LinearNeuralNetworkTest(unittest.TestCase):
@@ -243,20 +246,63 @@ class LinearNeuralNetworkTest(unittest.TestCase):
         self.assertEqual(2, results.size, msg="Number of outputs doesn't match what's expected")
         self.assertTrue(is_column_vector(results))
 
-    def test_linear_neural_net_learns(self):
+    def test_flat_neural_net_sigmoid_cap_learns(self):
         net = SimpleNeuralBinaryClassifier()
-        net.add_layer(ConvolutionalLayer((2, 2)))
-        net.add_layer(FullyConnectedLayer(4, 2))
-        net.add_layer(SoftmaxLayer())
+        net.add_layer(FullyConnectedLayer(2, 1))
+        net.add_layer(SigmoidLayer())
 
         # ignore the results, just run the _process to see what comes out
-        sample_inputs = numpy.array([[1.0, 1, 5], [2, 2, 2], [1, 1, 1]])
-        results = net._process(sample_inputs)
-        self.assertEqual(2, results.size, msg="Number of outputs doesn't match what's expected")
+        sample_inputs = numpy.random.rand(2, 1)
+        results = net.predict([sample_inputs])
+        self.assertEqual(1, results.size, msg="Number of outputs doesn't match what's expected")
         self.assertTrue(is_column_vector(results))
-        net._backpropagate(numpy.add(to_column_vector([-1, 1]), results))
-        results2 = net._process(sample_inputs)
-        self.assertGreater(results2[0, 0], results[0, 0],
-                           msg="Top output should have grown larger, because error indicated that it was too small (1 less than true value)")
-        self.assertLess(results2[1, 0], results[1, 0],
-                        msg="Bottom output should have grown smaller, because error indicated that it was too large (1 more than true value)")
+        net.fit([sample_inputs], [1])
+        results2 = net.predict([sample_inputs])
+        self.assertGreater(results2, results,
+                           msg="Output should have grown larger, because error indicated that it was too small (less than true value)")
+
+    def test_conv_neural_net_sigmoid_cap_learns_growing_output(self):
+        net = SimpleNeuralBinaryClassifier()
+        net.add_layer(ConvolutionalLayer((2, 2)))
+        net.add_layer(MeanpoolLayer((2, 2), overlap_tiles=False))
+        net.add_layer(FullyConnectedLayer(4, 1, activation_function_name='identity'))
+        net.add_layer(SigmoidLayer())
+
+        # ignore the results, just run the _process to see what comes out
+        sample_inputs = numpy.random.rand(5, 5)
+        results = net.predict([sample_inputs])
+        for _ in range(5):
+            self.assertEqual(1, results.size, msg="Number of outputs doesn't match what's expected")
+            self.assertTrue(is_column_vector(results))
+            net.fit([sample_inputs], [1])
+            results2 = net.predict([sample_inputs])
+        self.assertGreater(results2, results,
+                           msg="Output should have grown larger, because error indicated that it was too small (less than true value)")
+
+    def test_conv_neural_net_sigmoid_cap_learns_shrinking_output(self):
+        net = SimpleNeuralBinaryClassifier()
+        net.add_layer(ConvolutionalLayer((2, 2)))
+        net.add_layer(MeanpoolLayer((2, 2), overlap_tiles=False))
+        net.add_layer(FullyConnectedLayer(4, 1, activation_function_name='identity'))
+        net.add_layer(SigmoidLayer())
+
+        # ignore the results, just run the _process to see what comes out
+        sample_inputs = numpy.random.rand(5, 5)
+        results = net.predict([sample_inputs])
+        for _ in range(5):
+            self.assertEqual(1, results.size, msg="Number of outputs doesn't match what's expected")
+            self.assertTrue(is_column_vector(results))
+            net.fit([sample_inputs], [0])
+            results2 = net.predict([sample_inputs])
+        self.assertLess(results2, results,
+                        msg="Output should have grown smaller, because error indicated that it was too large (more than true value)")
+
+
+class SigmoidUnitTest(unittest.TestCase):
+    def test_sigmoid_layer_yields_correct_backprop_error(self):
+        layer = SigmoidLayer()
+        inputs = [numpy.array([0])]
+        result = layer.process(inputs, remember_inputs=True)
+        self.assertEqual(0.5, result, msg="Sigmoid is not calculating correctly")
+        error = layer.backpropagate([1])
+        self.assertGreater(0, error, msg="Sigmoid should indicate to net that its output was too low")
