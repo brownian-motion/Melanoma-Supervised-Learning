@@ -11,7 +11,7 @@ class LeafNode:
         if type(arr_examples) is np.ndarray and len(arr_examples.shape) == 2:
             return np.full(len(arr_examples),self.label)
         else:
-            return self.label
+            return [self.label]
 
 class BranchNode:
     def __init__(self, best_column, best_threshold):
@@ -24,11 +24,12 @@ class BranchNode:
         predictions = []
         for row in arr_examples:
             if is_row_below_threshold(row,self.best_column, self.best_threshold):
-                prediction = self.left.predict(row)
+                prediction = self.left.predict([row])
             else:
-                prediction = self.right.predict(row)
-            predictions.append(prediction)
-        return  np.asarray(predictions)
+                prediction = self.right.predict([row])
+            for p in prediction:
+                predictions.append(p)
+        return np.array(predictions)
 
 def is_row_below_threshold(row, col_number, threshold):
     return row[col_number] < threshold
