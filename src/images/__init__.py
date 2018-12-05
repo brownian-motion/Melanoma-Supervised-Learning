@@ -79,17 +79,50 @@ class Sample:
 
     @staticmethod
     def load_sample(file):
-        sample_json = json.load(file)
-        acquisition_data = sample_json[u'meta'][u'acquisition']
-        return Sample(
-            sample_json[u'name'],
-            sample_json[u'meta'][u'clinical'][u'diagnosis'],
-            (acquisition_data[u'pixelsX'], acquisition_data[u'pixelsY']),
-            os.path.dirname(file.name) + "/" + sample_json[u'name'] + ".jpg"
-        )
+        with file:
+            sample_json = json.load(file)
+            acquisition_data = sample_json[u'meta'][u'acquisition']
+            return Sample(
+                sample_json[u'name'],
+                sample_json[u'meta'][u'clinical'][u'diagnosis'],
+                (acquisition_data[u'pixelsX'], acquisition_data[u'pixelsY']),
+                os.path.dirname(file.name) + "/" + sample_json[u'name'] + ".jpg"
+            )
 
 
 def move_color_channel_to_first_axis(img):
     img = numpy.swapaxes(img, 2, 1)  # move color channel from axis 2 -> 1
     img = numpy.swapaxes(img, 1, 0)  # move color channel from axis 1 -> 0
     return img
+
+
+def batch(elems, n=1):
+    """
+    Given an iterable or generator, yields concrete batches (as a list) of size-n from it.
+
+    This is useful for loading images in batches using a single generator,
+    in order to load, say, 10MB at a time instead of the whole 500MB data set.
+
+    If there are not enough elements to fill the last batch,
+    then the remaining elements are returned as a list.
+
+    For example:
+
+    >>> for bat in batch(range(16), 5): print(bat)
+    [0, 1, 2, 3, 4]
+    [5, 6, 7, 8, 9]
+    [10, 11, 12, 13, 14]
+    [15]
+
+    :param elems: any iterable, list, or generator
+    :param n: the size of each batch to yield
+    :return: a generator that yields batches as size-n lists from the original source
+    """
+    buffer = []
+    for elem in elems:
+        buffer.append(elem)
+        if len(buffer) >= n:
+            yield buffer
+            buffer = []
+    if len(buffer) > 0:  # that is, if anything is left over after we exhausted arr
+        yield buffer

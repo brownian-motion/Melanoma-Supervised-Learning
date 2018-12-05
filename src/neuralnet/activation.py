@@ -40,9 +40,28 @@ def vec_sigmoid(xs):
     return 1 / (1 + numpy.exp(-xs))
 
 
+def vec_sigmoid_2(xs):
+    """
+    just like vec_sigmoid(), but ranging from -1 to 1
+    """
+    return vec_sigmoid(xs) * 2 - 1
+
+
 def scalar_sigmoid_deriv(x):
     sigmoid = scalar_sigmoid(x)
     return (sigmoid - 1) * sigmoid
 
 
 vec_sigmoid_deriv = numpy.vectorize(scalar_sigmoid_deriv)
+
+
+def vec_sigmoid_2_deriv(xs):
+    return 2 * vec_sigmoid_deriv(xs)
+
+
+def vec_identity(xs):
+    return xs
+
+
+def vec_identity_deriv(xs):
+    return numpy.full_like(xs, 1)
