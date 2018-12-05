@@ -8,7 +8,6 @@ from scipy.signal import convolve  # to perform convolution
 from skimage.measure import block_reduce
 
 from cross_entropy import binary_cross_entropy
-from images import batch
 from neuralnet.activation import *
 from neuralnet.vector_utils import *
 
@@ -411,15 +410,10 @@ class SimpleNeuralBinaryClassifier:
     def __init__(self):
         self.layers = []
 
-    def fit(self, imgs, obs, batch_size=None):
+    def fit(self, imgs, obs):
         if type(obs) is not numpy.ndarray:
             obs = numpy.asarray(obs)
-        if batch_size is None or batch_size <= 0:
-            if obs.size > 10:
-                batch_size = min(obs.size // 5, 10)
-            else:
-                batch_size = obs.size
-            print("Training with batch size %d" % batch_size)
+        print("Fitting on %d samples." % obs.size)
 
         pos_nums = []
         pos_entropies = []
@@ -428,42 +422,37 @@ class SimpleNeuralBinaryClassifier:
 
         start_time = timeit.default_timer()
 
-        batch_start = 0
+        sample_num = 0
         batch_entropies = []
-        for bat in batch(imgs, n=batch_size):
-            print("Predicting batch starting at sample %d" % batch_start)
-            total_batch_entropy = 0.0
-            for i in range(len(bat)):
-                sample_num = batch_start + i
-                y = obs[sample_num]
-                yhat = self._process(bat[i], remember_inputs=True)
-                entropy = binary_cross_entropy(yhat, y)
-                total_batch_entropy += entropy
-                if y == 1:
-                    pos_nums.append(1)
-                    pos_entropies.append(entropy)
-                else:
-                    neg_nums.append(0)
-                    neg_entropies.append(entropy)
-                print("   Finished sample %3d (%8s): %.1f%% prediction melanoma (error = %.4f)" % (
-                    sample_num, "melanoma" if y else "benign", yhat * 100, entropy), flush=True)
-            batch_entropies.append(total_batch_entropy / len(bat))
+        for img in imgs:
+            y = obs[sample_num]
+            print("Predicting for %s sample %d" % ("+" if y == 1 else "-", sample_num))
+            yhat = self._process(img, remember_inputs=True)
+            entropy = binary_cross_entropy(yhat, y)
+            if y == 1:
+                pos_nums.append(1)
+                pos_entropies.append(entropy)
+            else:
+                neg_nums.append(0)
+
+                neg_entropies.append(entropy)
+            print("   Finished sample %3d (%8s): %.1f%% prediction melanoma (error = %.4f)" % (
+                sample_num, "melanoma" if y else "benign", yhat * 100, entropy), flush=True)
+            batch_entropies.append(entropy)
             print("Learning from results of prediction...", flush=True)
-            for i in reversed(range(len(bat))):
-                sample_num = batch_start + i
-                print("    Learning from sample %d" % sample_num, flush=True)
-                y = obs[sample_num]
-                if y == 1:
-                    true_outputs = to_column_vector([1])
-                elif y == 0:
-                    true_outputs = to_column_vector([0])
-                else:
-                    raise ValueError("Unexpected observation %s for sample %d. "
-                                     "This neural net can only perform "
-                                     "binary classification." % (y, sample_num))
-                self._backpropagate(true_outputs)
+            print("    Learning from sample %d" % sample_num, flush=True)
+            y = obs[sample_num]
+            if y == 1:
+                true_outputs = to_column_vector([1])
+            elif y == 0:
+                true_outputs = to_column_vector([0])
+            else:
+                raise ValueError("Unexpected observation %s for sample %d. "
+                                 "This neural net can only perform "
+                                 "binary classification." % (y, sample_num))
+            self._backpropagate(true_outputs)
             print()
-            batch_start += batch_size
+            sample_num += 1
 
         dur = timeit.default_timer() - start_time
         print("Avg. time to fit sample is %.0f seconds " % (dur / obs.size))
@@ -473,7 +462,7 @@ class SimpleNeuralBinaryClassifier:
         plt.show()
 
         plt.plot(batch_entropies)
-        plt.xlabel("Batch number (size %d)" % batch_size)
+        plt.xlabel("Sample number")
         plt.ylabel("Avg. cross-entropy")
         plt.show()
 

@@ -79,14 +79,15 @@ class Sample:
 
     @staticmethod
     def load_sample(file):
-        sample_json = json.load(file)
-        acquisition_data = sample_json[u'meta'][u'acquisition']
-        return Sample(
-            sample_json[u'name'],
-            sample_json[u'meta'][u'clinical'][u'diagnosis'],
-            (acquisition_data[u'pixelsX'], acquisition_data[u'pixelsY']),
-            os.path.dirname(file.name) + "/" + sample_json[u'name'] + ".jpg"
-        )
+        with file:
+            sample_json = json.load(file)
+            acquisition_data = sample_json[u'meta'][u'acquisition']
+            return Sample(
+                sample_json[u'name'],
+                sample_json[u'meta'][u'clinical'][u'diagnosis'],
+                (acquisition_data[u'pixelsX'], acquisition_data[u'pixelsY']),
+                os.path.dirname(file.name) + "/" + sample_json[u'name'] + ".jpg"
+            )
 
 
 def move_color_channel_to_first_axis(img):
