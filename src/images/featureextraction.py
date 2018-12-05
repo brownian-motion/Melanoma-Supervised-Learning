@@ -4,7 +4,8 @@ from PIL import *
 from images import Sample
 import matplotlib
 
-
+"""Feature Extraction class. By calling this functions in this class, 
+images can be manipulated and refactored into features."""
 class FeatureExtractor:
     def __init__(self):
         features_list = ""
@@ -20,7 +21,7 @@ def get_features(im_arr,num_features = 64):
     return features_list
 
 
-def convert_image(sample):
+def convert_image_to_greyscale(sample):
     """
     This method will specifically take an image and convert it to
     Greyscale before returning an image. """
