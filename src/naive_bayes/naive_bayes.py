@@ -96,12 +96,28 @@ def predict(summaries, inputVector):
 			bestLabel = classValue
 	return bestLabel
 
+def predict2(summaries, inputVector):
+	probabilities = calculateClassProbabilities(summaries, inputVector)
+	bestLabel, bestProb = None, -1
+	for classValue, probability in probabilities.items():
+		if bestLabel is None or probability > bestProb:
+			bestProb = probability
+			bestLabel = classValue
+	return bestProb
+
 def getPredictions(summaries, testSet):
 	predictions = []
 	for i in range(len(testSet)):
 		result = predict(summaries, testSet[i])
 		predictions.append(result)
 	return predictions
+
+def getProbabilities(summaries, testSet):
+	probabilities = []
+	for i in range(len(testSet)):
+		result = predict2(summaries, testSet[i])
+		probabilities.append(result)
+	return probabilities
 
 def getAccuracy(testSet, predictions):
 	correct = 0
