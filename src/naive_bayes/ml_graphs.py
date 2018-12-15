@@ -4,7 +4,8 @@ from sklearn import preprocessing
 
 csv = np.genfromtxt('predictions.csv', delimiter=',')
 true_lab = csv[:,0]
-prob_lab = csv[:,2]
+prob_lab = csv[:,1]
+inv_prob_lab = csv[:,2]
 
 a = 0
 b = 0
